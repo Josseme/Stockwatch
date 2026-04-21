@@ -1,0 +1,33 @@
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database
+inventory.db
+
+# Secrets
+.env
+
+# Logs
+logs/
+*.log
+
+# Scripts
+fix_db.py
+scratch_verify.py
+test_hash.py
+test_smtp_auth.py
+test_tracker.py
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.DS_Store
