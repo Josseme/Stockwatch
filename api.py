@@ -136,7 +136,11 @@ class ItemCreate(BaseModel):
     barcode: Optional[str] = None
 
 class ItemUpdate(BaseModel):
-    quantity: int
+    name: Optional[str] = None
+    quantity: Optional[int] = None
+    threshold: Optional[int] = None
+    price: Optional[float] = None
+    barcode: Optional[str] = None
 
 class UserCreate(BaseModel):
     username: str
@@ -146,6 +150,9 @@ class UserCreate(BaseModel):
 class CheckoutItem(BaseModel):
     item_id: int
     qty_change: int
+
+class BarcodeData(BaseModel):
+    barcode: str
 
 # Startup event to ensure DB is initialized
 @app.on_event("startup")
@@ -215,7 +222,7 @@ def logout(current_user: dict = Depends(get_current_user)):
 def get_transactions(current_user: dict = Depends(get_current_user)):
     from database import get_all_transactions
     txs = get_all_transactions()
-    return [{"id": t[0], "timestamp": t[1], "item_name": t[2], "qty_change": t[3], "username": t[4]} for t in txs]
+    return [{"id": t[0], "timestamp": t[1], "item_name": t[2], "qty_change": t[3], "username": t[4], "unit_price": t[5]} for t in txs]
 
 @app.post("/api/inventory/checkout")
 def checkout(cart_items: List[CheckoutItem], background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
@@ -250,6 +257,7 @@ def test_email(background_tasks: BackgroundTasks):
 
 @app.get("/api/inventory", response_model=List[dict])
 def read_inventory(current_user: dict = Depends(get_current_user)):
+    from database import get_all_items, get_item_barcodes
     items = get_all_items()
     # Convert tuples to dicts for easier frontend handling
     result = [
@@ -259,7 +267,7 @@ def read_inventory(current_user: dict = Depends(get_current_user)):
             "quantity": item[2],
             "threshold": item[3],
             "price": item[4],
-            "barcode": item[5] if len(item) > 5 else None
+            "barcodes": get_item_barcodes(item[0])
         }
         for item in items
     ]
@@ -280,27 +288,78 @@ def create_item(item: ItemCreate, background_tasks: BackgroundTasks, current_use
     return {"message": msg}
 
 @app.put("/api/inventory/{item_id}")
-def update_item(item_id: int, item: ItemUpdate, background_tasks: BackgroundTasks, current_user: dict = Depends(require_admin)):
+def update_item(item_id: int, item: ItemUpdate, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+    from database import get_connection, log_transaction_internal
     existing_item = get_item_by_id(item_id)
     if not existing_item:
         raise HTTPException(status_code=404, detail="Item not found")
         
-    delta = item.quantity - existing_item[2]
-    update_quantity(item_id, item.quantity)
+    # Permission Check: Only admins can change core details (name, threshold, price, barcode)
+    is_admin = current_user["role"] == "admin"
+    if not is_admin:
+        if item.name is not None or item.threshold is not None or item.price is not None or item.barcode is not None:
+            raise HTTPException(status_code=403, detail="Admin privileges required to edit product details (name, price, barcode, etc.)")
+
+    # Update logic
+    conn = get_connection()
+    cursor = conn.cursor()
     
-    if delta != 0:
-        log_transaction(item_id, existing_item[1], delta, current_user['id'])
+    # We update only provided fields
+    updates = []
+    params = []
+    if item.name is not None:
+        updates.append("name = ?")
+        params.append(item.name)
+    if item.quantity is not None:
+        updates.append("quantity = ?")
+        params.append(item.quantity)
+    if item.threshold is not None:
+        updates.append("threshold = ?")
+        params.append(item.threshold)
+    if item.price is not None:
+        updates.append("price = ?")
+        params.append(item.price)
+    if item.barcode is not None:
+        updates.append("barcode = ?")
+        params.append(item.barcode.strip() if item.barcode else None)
+        
+    if not updates:
+        return {"message": "No changes provided"}
+        
+    params.append(item_id)
+    query = f"UPDATE inventory SET {', '.join(updates)} WHERE id = ?"
+    
+    try:
+        cursor.execute("BEGIN TRANSACTION")
+        cursor.execute(query, params)
+        
+        # Log quantity changes if applicable
+        if item.quantity is not None:
+            delta = item.quantity - existing_item[2]
+            if delta != 0:
+                log_transaction_internal(cursor, item_id, item.name or existing_item[1], delta, current_user['id'])
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"CRITICAL UPDATE ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
+    finally:
+        conn.close()
     
     # Broadcast refresh
     background_tasks.add_task(manager.broadcast, {"type": "REFRESH_INVENTORY"})
     
-    # Check for low stock alert after updating (in background)
-    background_tasks.add_task(check_low_stock, item_id)
+    # Check for low stock alert if quantity changed
+    if item.quantity is not None:
+        background_tasks.add_task(check_low_stock, item_id)
         
-    return {"message": f"Item quantity updated to {item.quantity}"}
+    return {"message": "Item updated successfully"}
 
 @app.delete("/api/inventory/{item_id}")
-def delete_item_route(item_id: int, current_user: dict = Depends(require_admin)):
+def delete_item_route(item_id: int, background_tasks: BackgroundTasks, current_user: dict = Depends(require_admin)):
     existing_item = get_item_by_id(item_id)
     if not existing_item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -319,10 +378,32 @@ def run_alerts(current_user: dict = Depends(get_current_user)):
     check_low_stock()
     return {"message": "Alerts triggered successfully."}
 
+@app.get("/api/reports/daily")
+def daily_report(current_user: dict = Depends(require_admin)):
+    from database import get_daily_report
+    report = get_daily_report()
+    return [{"date": r[0], "sales": r[1], "restock": r[2]} for r in report]
+
+@app.post("/api/inventory/{item_id}/barcodes")
+def link_barcode(item_id: int, data: BarcodeData, current_user: dict = Depends(get_current_user)):
+    from database import add_barcode_to_item
+    success, msg = add_barcode_to_item(item_id, data.barcode.strip())
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"message": msg}
+
+@app.post("/api/barcode/webhook")
+async def barcode_webhook(data: BarcodeData, background_tasks: BackgroundTasks):
+    """Receive barcode from external app and broadcast to frontend via WebSocket."""
+    # Strip whitespace to handle potential newline characters from scanner apps
+    barcode = data.barcode.strip()
+    await manager.broadcast({"type": "BARCODE_SCANNED", "barcode": barcode})
+    return {"status": "success", "barcode": barcode}
+
 @app.get("/api/scan/{barcode}")
 def scan_item(barcode: str, current_user: dict = Depends(get_current_user)):
-    from database import get_item_by_barcode
-    item = get_item_by_barcode(barcode)
+    from database import get_item_by_barcode, get_item_barcodes
+    item = get_item_by_barcode(barcode.strip())
     if not item:
         raise HTTPException(status_code=404, detail="Item with this barcode not found")
         
@@ -332,5 +413,5 @@ def scan_item(barcode: str, current_user: dict = Depends(get_current_user)):
         "quantity": item[2],
         "threshold": item[3],
         "price": item[4],
-        "barcode": item[5] if len(item) > 5 else None
+        "barcodes": get_item_barcodes(item[0])
     }

@@ -15,6 +15,9 @@ export default function Inventory() {
   const [toasts, setToasts] = useState([]);
   const [scanMode, setScanMode] = useState('sales'); // 'sales' | 'restock'
   const [liveStaff, setLiveStaff] = useState([]);
+  const [unrecognizedBarcode, setUnrecognizedBarcode] = useState(null);
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
   
   const navigate = useNavigate();
   // New Item Form State
@@ -27,8 +30,13 @@ export default function Inventory() {
     try {
       const res = await authFetch(`${API_BASE}/scan/${barcode}`);
       if (!res.ok) {
-        if (res.status === 404) addToast(`Unrecognized: ${barcode}`, 'warning');
-        else addToast(`Error looking up barcode`, 'error');
+        if (res.status === 404) {
+          setUnrecognizedBarcode(barcode);
+          setIsLinkModalOpen(true);
+          addToast(`Unrecognized: ${barcode}`, 'warning');
+        } else {
+          addToast(`Error looking up barcode`, 'error');
+        }
         return;
       }
       
@@ -67,6 +75,8 @@ export default function Inventory() {
         const data = JSON.parse(event.data);
         if (data.type === 'REFRESH_INVENTORY') {
           fetchInventory();
+        } else if (data.type === 'BARCODE_SCANNED') {
+          handleScan(data.barcode);
         }
       };
       ws.onclose = () => {
@@ -94,6 +104,34 @@ export default function Inventory() {
     } catch (err) {
       console.error('Failed to fetch live staff', err);
     }
+  };
+
+  const handleLinkBarcode = async (itemId) => {
+    try {
+      const res = await authFetch(`${API_BASE}/inventory/${itemId}/barcodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode: unrecognizedBarcode })
+      });
+      if (res.ok) {
+        addToast('Barcode linked successfully!', 'success');
+        setIsLinkModalOpen(false);
+        fetchInventory();
+        // Automatically process the scan after linking
+        setTimeout(() => handleScan(unrecognizedBarcode), 500);
+      } else {
+        const error = await res.json();
+        addToast(error.detail || 'Failed to link barcode', 'error');
+      }
+    } catch (err) {
+      addToast('Link error: ' + err.message, 'error');
+    }
+  };
+
+  const handleRegisterNew = () => {
+    setNewItem({ name: '', quantity: '', threshold: '', price: '', barcode: unrecognizedBarcode });
+    setIsLinkModalOpen(false);
+    setIsModalOpen(true);
   };
 
   const handleLogout = async () => {
@@ -162,11 +200,11 @@ export default function Inventory() {
   };
 
   const updateQuantity = async (id, currentQty, delta) => {
-    const newQty = currentQty + delta;
+    const newQty = parseInt(currentQty) + delta;
     if (newQty < 0) return; // Prevent negative stock
     
-    // Optimistic UI Update
-    setItems(items.map(item => item.id === id ? { ...item, quantity: newQty } : item));
+    // Optimistic UI Update (using functional update to avoid stale state)
+    setItems(prev => prev.map(item => item.id === id ? { ...item, quantity: newQty } : item));
     
     try {
       const res = await authFetch(`${API_BASE}/inventory/${id}`, {
@@ -174,15 +212,19 @@ export default function Inventory() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: newQty })
       });
-      if (!res.ok) throw new Error('Failed to update quantity');
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Failed to update quantity');
+      }
       
       const item = items.find(i => i.id === id);
-      if (newQty < item.threshold && currentQty >= item.threshold) {
+      if (item && newQty < item.threshold && currentQty >= item.threshold) {
          addToast(`Low stock alert triggered for ${item.name}`, 'warning');
       }
     } catch (err) {
       addToast(err.message, 'error');
-      // Revert optimism
+      // Revert optimism by refetching
       fetchInventory();
     }
   };
@@ -353,7 +395,7 @@ export default function Inventory() {
       {/* Main Table Panel */}
       <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '24px 28px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '600', margin: 0 }}>Active Warehouse Inventory</h2>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '600', margin: 0 }}>Active Shop Inventory</h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-secondary)' }}></div>
             System Synced
@@ -364,7 +406,7 @@ export default function Inventory() {
         ) : items.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '100px 0', color: 'var(--text-secondary)' }}>
             <Package size={48} style={{ opacity: 0.1, marginBottom: '16px' }} />
-            <p>Warehouse is currently empty. Initialize inventory to begin.</p>
+            <p>Shop is currently empty. Initialize inventory to begin.</p>
           </div>
         ) : (
           <div className="table-container">
@@ -385,8 +427,17 @@ export default function Inventory() {
                   return (
                     <tr key={item.id} style={{ opacity: item.isOptimistic ? 0.5 : 1, animation: `fadeIn 0.4s ease-out ${index * 0.03}s both` }}>
                       <td>
-                        <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{item.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>ID: #SW-{item.id.toString().padStart(4, '0')}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                           <div style={{ position: 'relative' }}>
+                             <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{item.name}</div>
+                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>ID: #SW-{item.id.toString().padStart(4, '0')}</div>
+                           </div>
+                           {item.barcodes?.length > 0 && (
+                             <div title={item.barcodes.join(', ')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '0.7rem', color: 'var(--accent-secondary)' }}>
+                               <Smartphone size={10} /> {item.barcodes.length}
+                             </div>
+                           )}
+                        </div>
                       </td>
                       <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Ksh {item.price.toFixed(2)}</td>
                       <td>
@@ -464,6 +515,77 @@ export default function Inventory() {
               <button type="submit" className="btn btn-primary">Save Product</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* Link Barcode Modal */}
+      <div className={`modal-overlay ${isLinkModalOpen ? 'active' : ''}`} onClick={(e) => {
+        if (e.target.classList.contains('modal-overlay')) setIsLinkModalOpen(false);
+      }}>
+        <div className="glass-panel modal-content" style={{ maxWidth: '500px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Link New Barcode</h2>
+            <button className="btn-ghost" onClick={() => setIsLinkModalOpen(false)} style={{ padding: '4px' }}>
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="glass-panel" style={{ padding: '16px', marginBottom: '24px', background: 'rgba(52, 211, 153, 0.1)', border: '1px solid var(--accent-secondary)' }}>
+            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+              Scanned: <strong style={{ color: 'var(--accent-secondary)' }}>{unrecognizedBarcode}</strong>
+            </p>
+            <p style={{ margin: '8px 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              This barcode is not in the system. Select a product below to link it.
+            </p>
+          </div>
+
+          <div className="form-group">
+            <label>Search Existing Product</label>
+            <input 
+              type="text" 
+              placeholder="Filter products..." 
+              value={searchFilter}
+              onChange={e => setSearchFilter(e.target.value)}
+              style={{ marginBottom: '12px' }}
+            />
+          </div>
+
+          {isAdmin && (
+            <button 
+              className="btn btn-primary" 
+              style={{ width: '100%', marginBottom: '20px', gap: '10px' }}
+              onClick={handleRegisterNew}
+            >
+              <Plus size={18} /> Register as New Product
+            </button>
+          )}
+
+          <div style={{ paddingBottom: '8px', fontSize: '0.8rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--panel-border)', marginBottom: '12px' }}>
+             Or link to existing:
+          </div>
+
+          <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {items
+              .filter(i => i.name.toLowerCase().includes(searchFilter.toLowerCase()))
+              .map(item => (
+                <button 
+                  key={item.id} 
+                  className="btn btn-ghost" 
+                  style={{ justifyContent: 'space-between', padding: '12px 16px', textAlign: 'left', width: '100%' }}
+                  onClick={() => handleLinkBarcode(item.id)}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontWeight: '600' }}>{item.name}</span>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Current Stock: {item.quantity}</span>
+                  </div>
+                  <LinkIcon size={16} />
+                </button>
+              ))}
+          </div>
+          
+          <div className="modal-actions" style={{ marginTop: '24px' }}>
+            <button className="btn btn-ghost" onClick={() => setIsLinkModalOpen(false)}>Cancel</button>
+          </div>
         </div>
       </div>
 
