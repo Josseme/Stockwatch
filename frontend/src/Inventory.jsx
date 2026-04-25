@@ -18,6 +18,8 @@ export default function Inventory() {
   const [unrecognizedBarcode, setUnrecognizedBarcode] = useState(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
+  const [cart, setCart] = useState([]);
+  const [isBatchMode, setIsBatchMode] = useState(false);
   
   const navigate = useNavigate();
   // New Item Form State
@@ -42,11 +44,54 @@ export default function Inventory() {
       
       const item = await res.json();
       const delta = scanMode === 'sales' ? -1 : 1;
-      await updateQuantity(item.id, item.quantity, delta);
-      addToast(`${scanMode === 'sales' ? 'Sold' : 'Restocked'} 1x ${item.name}`, 'success');
+
+      if (isBatchMode) {
+        addToCart(item, delta);
+      } else {
+        await updateQuantity(item.id, item.quantity, delta);
+        addToast(`${scanMode === 'sales' ? 'Sold' : 'Restocked'} 1x ${item.name}`, 'success');
+      }
       
     } catch (err) {
        addToast(`Scan error: ${err.message}`, 'error');
+    }
+  };
+
+  const addToCart = (item, delta) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) {
+        // If switching modes (e.g. from Sales to Restock while item in cart), handle accordingly
+        // For simplicity, we just add the delta
+        return prev.map(i => i.id === item.id ? { ...i, qty_change: i.qty_change + delta } : i);
+      }
+      return [...prev, { id: item.id, name: item.name, price: item.price, qty_change: delta }];
+    });
+    addToast(`Added ${item.name} to batch`, 'info');
+  };
+
+  const removeFromCart = (id) => {
+    setCart(prev => prev.filter(i => i.id !== id));
+  };
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    try {
+      const res = await authFetch(`${API_BASE}/inventory/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cart.map(i => ({ item_id: i.id, qty_change: i.qty_change })))
+      });
+      if (res.ok) {
+        addToast('Batch processed successfully!', 'success');
+        setCart([]);
+        fetchInventory();
+      } else {
+        const error = await res.json();
+        addToast(error.detail || 'Checkout failed', 'error');
+      }
+    } catch (err) {
+      addToast('Checkout error: ' + err.message, 'error');
     }
   };
 
@@ -268,24 +313,6 @@ export default function Inventory() {
           Stockwatch
         </h1>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          {/* Scan Mode Toggle */}
-          <div className="glass-panel" style={{ padding: '6px', display: 'flex', gap: '4px', borderRadius: '12px' }}>
-            <button 
-              className="btn"
-              style={{ padding: '8px 16px', borderRadius: '8px', background: scanMode === 'sales' ? 'var(--accent-primary-bold)' : 'transparent', color: scanMode === 'sales' ? 'white' : 'var(--text-secondary)' }}
-              onClick={() => setScanMode('sales')}
-            >
-              Sales
-            </button>
-            <button 
-              className="btn"
-              style={{ padding: '8px 16px', borderRadius: '8px', background: scanMode === 'restock' ? 'var(--accent-secondary)' : 'transparent', color: scanMode === 'restock' ? 'white' : 'var(--text-secondary)' }}
-              onClick={() => setScanMode('restock')}
-            >
-              Restock
-            </button>
-          </div>
-
           {isAdmin && (
             <Link to="/attendance" className="btn btn-ghost" style={{ color: 'var(--accent-secondary)', borderColor: 'rgba(52, 211, 153, 0.2)' }}>
               <Users size={18} /> Attendance
@@ -396,9 +423,55 @@ export default function Inventory() {
       <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '24px 28px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: '600', margin: 0 }}>Active Shop Inventory</h2>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-secondary)' }}></div>
-            System Synced
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+            {/* Grouped Scan Settings */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: '14px', border: '1px solid var(--panel-border)' }}>
+              {/* Sales/Restock Toggle (Compact) */}
+              <div style={{ display: 'flex', gap: '2px', background: 'rgba(0,0,0,0.2)', padding: '2px', borderRadius: '10px' }}>
+                <button 
+                  onClick={() => setScanMode('sales')}
+                  style={{ 
+                    padding: '6px 12px', fontSize: '0.75rem', borderRadius: '8px', 
+                    background: scanMode === 'sales' ? 'var(--accent-primary-bold)' : 'transparent',
+                    color: scanMode === 'sales' ? 'white' : 'var(--text-muted)',
+                    border: 'none', cursor: 'pointer', fontWeight: 600
+                  }}
+                >
+                  Sales
+                </button>
+                <button 
+                  onClick={() => setScanMode('restock')}
+                  style={{ 
+                    padding: '6px 12px', fontSize: '0.75rem', borderRadius: '8px', 
+                    background: scanMode === 'restock' ? 'var(--accent-secondary)' : 'transparent',
+                    color: scanMode === 'restock' ? 'white' : 'var(--text-muted)',
+                    border: 'none', cursor: 'pointer', fontWeight: 600
+                  }}
+                >
+                  Restock
+                </button>
+              </div>
+
+              <div style={{ width: '1px', height: '16px', background: 'var(--panel-border)' }}></div>
+
+              {/* Multi-Scan Toggle (Compact) */}
+              <div 
+                onClick={() => setIsBatchMode(!isBatchMode)}
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', 
+                  color: isBatchMode ? 'var(--accent-primary)' : 'var(--text-muted)',
+                  fontSize: '0.75rem', fontWeight: 600, padding: '0 4px'
+                }}
+              >
+                <Bluetooth size={14} />
+                {isBatchMode ? 'Multi-Scan ON' : 'Single Scan'}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', opacity: 0.7 }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-secondary)' }}></div>
+              Synced
+            </div>
           </div>
         </div>
         {loading ? (
@@ -588,6 +661,55 @@ export default function Inventory() {
           </div>
         </div>
       </div>
+
+      {/* Batch Checkout Drawer */}
+      {cart.length > 0 && (
+        <div className="glass-panel" style={{ 
+          position: 'fixed', 
+          bottom: '24px', 
+          right: '24px', 
+          width: '350px', 
+          maxHeight: '500px', 
+          zIndex: 100, 
+          display: 'flex', 
+          flexDirection: 'column',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          animation: 'slideUp 0.3s ease-out'
+        }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+             <h3 style={{ margin: 0, fontSize: '1rem' }}>Pending Batch ({cart.length})</h3>
+             <button className="btn-ghost" onClick={() => setCart([])} style={{ fontSize: '0.75rem', color: 'var(--accent-danger)' }}>Clear All</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+            {cart.map(item => (
+              <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', marginBottom: '8px' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.name}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {item.qty_change > 0 ? 'Restock' : 'Sale'}: {Math.abs(item.qty_change)}x
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ fontWeight: 700 }}>Ksh {(item.price * Math.abs(item.qty_change)).toLocaleString()}</div>
+                  <button className="btn-ghost" onClick={() => removeFromCart(item.id)} style={{ color: 'var(--text-muted)', padding: '4px' }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderTop: '1px solid var(--panel-border)' }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontWeight: 700 }}>
+                <span>Batch Total</span>
+                <span>Ksh {cart.reduce((acc, i) => acc + (i.price * Math.abs(i.qty_change)), 0).toLocaleString()}</span>
+             </div>
+             <button className="btn btn-primary" style={{ width: '100%', py: '12px' }} onClick={handleCheckout}>
+                Process Batch Scans
+             </button>
+          </div>
+        </div>
+      )}
 
       {/* Toasts */}
       <div className="toast-container">
