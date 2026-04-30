@@ -476,6 +476,7 @@ body.dark-mode .glass-panel {
   font-weight: 800;
   background: linear-gradient(to right, var(--text-primary), var(--accent-primary));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 4px;
 }

@@ -95,6 +95,7 @@ const Sidebar = ({ isCollapsed, onToggle, isMobileOpen }) => {
               letterSpacing: '0.1em',
               background: 'linear-gradient(to right, #6366f1, #10b981)',
               WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               fontFamily: "'Outfit', sans-serif"
             }}>
