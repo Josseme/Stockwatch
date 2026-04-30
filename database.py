@@ -378,8 +378,6 @@ def initialize_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_cust_id ON orders(customer_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_user_id ON orders(user_id)")
     
-    # Analyze the database to optimize query planning
-    cursor.execute("ANALYZE")
     print("AUDIT: Enterprise optimization complete.")
 
     conn.commit()
