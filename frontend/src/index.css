@@ -85,13 +85,23 @@ body.slate-theme {
   box-sizing: border-box;
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  width: 100%;
+  overflow-x: hidden; /* Prevents side-to-side wobbling */
+  position: relative;
+}
+
 body {
   font-family: var(--font-main);
   background-color: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
   transition: background-color 0.3s ease;
-  overflow-x: hidden;
+  /* Support for notches on modern phones */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* Layout */
