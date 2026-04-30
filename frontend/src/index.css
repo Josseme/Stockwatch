@@ -89,9 +89,7 @@ html, body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  width: 100%;
-  overflow-x: hidden; /* Prevents side-to-side wobbling */
-  position: relative;
+  overflow-x: hidden;
 }
 
 body {
@@ -660,6 +658,10 @@ body.dark-mode .modern-table .hover-row:hover {
 @media (max-width: 1024px) {
   :root {
     --sidebar-width: 0px;
+  }
+
+  .layout-wrapper {
+    display: block; /* Simpler for mobile */
   }
 
   .sidebar {
