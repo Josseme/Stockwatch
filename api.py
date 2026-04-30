@@ -49,6 +49,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "Stockwatch API is running"}
+
 # Real-time synchronization manager
 class ConnectionManager:
     def __init__(self):
