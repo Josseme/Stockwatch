@@ -8,3 +8,4 @@ libsql
 slowapi
 bcrypt
 python-multipart
+requests
