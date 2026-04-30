@@ -58,9 +58,11 @@ def send_email_alert(item_name, quantity, threshold):
         log_error(error_msg)
         return False
 
+from database import get_connection
+
 def check_low_stock(item_id=None):
     """Checks inventory for low stock items and triggers alerts."""
-    conn = sqlite3.connect("inventory.db")
+    conn = get_connection()
     cursor = conn.cursor()
 
     if item_id:
@@ -76,5 +78,3 @@ def check_low_stock(item_id=None):
         iid, name, quantity, threshold = item
         if quantity < threshold:
             send_email_alert(name, quantity, threshold)
-
-    conn.close()

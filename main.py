@@ -30,17 +30,17 @@ def main():
     
     while True:
         print_menu()
-        choice = input("Select an option (1-8): ")
+        choice = input("Select an option (1-6): ")
         
         if choice == '1':
             items = get_all_items()
             if not items:
                 print("\nInventory is currently empty.")
             else:
-                print("\nID | Name            | Quantity | Threshold | Price    ")
-                print("-" * 55)
+                print("\nID | Name            | Quantity | Threshold | Price    | Cost     ")
+                print("-" * 70)
                 for item in items:
-                    print(f"{item[0]:2} | {item[1]:<15} | {item[2]:<8} | {item[3]:<9} | Ksh {item[4]:<7.2f}")
+                    print(f"{item[0]:2} | {item[1]:<15} | {item[2]:<8} | {item[3]:<9} | Ksh {item[4]:<7.2f} | Ksh {item[6]:<7.2f}")
         
         elif choice == '2':
             print("\n--- Add New Item ---")
@@ -48,8 +48,9 @@ def main():
             try:
                 qty = int(input("Initial Quantity: "))
                 threshold = int(input("Low Stock Threshold: "))
-                price = float(input("Unit Price (Ksh): "))
-                success, msg = add_item(name, qty, threshold, price)
+                price = float(input("Selling Price (Ksh): "))
+                cost_price = float(input("Cost Price (Ksh): ") or 0)
+                success, msg = add_item(name, qty, threshold, price, cost_price=cost_price)
                 print(f"\n{msg}")
                 # Check immediately if the new item is already under threshold
                 if success and qty < threshold:
@@ -70,7 +71,7 @@ def main():
                 print(f"\nQuantity updated successfully to {new_qty}.")
                 # Check for low stock after updating
                 if new_qty < item[3]:
-                    check_low_stock(item_id)
+                    check_low_stock()
             except ValueError:
                  print("\nInvalid input! ID and Quantity must be integers.")
                  

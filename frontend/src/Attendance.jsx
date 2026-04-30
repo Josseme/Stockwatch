@@ -3,7 +3,7 @@ import { Clock, ArrowLeft, ShieldCheck, User } from 'lucide-react';
 import { authFetch } from './authFetch';
 import { Link } from 'react-router-dom';
 
-const API_BASE = 'http://localhost:8000/api';
+import { API_BASE } from './config';
 
 export default function Attendance() {
   const [logs, setLogs] = useState([]);
@@ -26,21 +26,17 @@ export default function Attendance() {
   };
 
   return (
-    <div className="app-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div className="metric-icon blue" style={{ background: 'rgba(52, 211, 153, 0.1)', color: 'var(--accent-secondary)' }}>
-            <Clock size={24} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '2rem', fontWeight: 700, margin: 0 }}>Attendance Log</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Personnel Clock-In/Out Records</p>
-          </div>
+    <div className="attendance-view">
+      <header style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
+            Staff Attendance
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            Personnel Clock-In/Out audit records and presence tracking
+          </p>
         </div>
-        <Link to="/" className="btn btn-ghost">
-          <ArrowLeft size={18} /> Back to Operations
-        </Link>
-      </div>
+      </header>
 
       <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
@@ -90,3 +86,4 @@ export default function Attendance() {
     </div>
   );
 }
+

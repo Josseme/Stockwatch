@@ -3,7 +3,7 @@ import { authFetch } from './authFetch';
 import { Package, UserPlus, User, Lock, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const API_BASE = 'http://localhost:8000/api';
+import { API_BASE } from './config';
 
 export default function Register() {
   const [username, setUsername] = useState('');
@@ -32,6 +32,7 @@ export default function Register() {
 
   return (
     <div className="auth-wrapper">
+      <div className="mesh-bg" />
       <div className="glass-panel auth-card" style={{ maxWidth: '480px' }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div className="metric-icon blue" style={{ margin: '0 auto 24px', width: '64px', height: '64px', fontSize: '32px', background: 'rgba(52, 211, 153, 0.1)', color: 'var(--accent-secondary)' }}>
@@ -106,3 +107,4 @@ export default function Register() {
     </div>
   );
 }
+
