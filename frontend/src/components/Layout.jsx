@@ -15,6 +15,7 @@ const Layout = () => {
   const [eyeProtection, setEyeProtection] = useState(localStorage.getItem('eyeProtection') === 'true');
   const [isCollapsed, setIsCollapsed] = useState(localStorage.getItem('sidebarCollapsed') === 'true');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(localStorage.getItem('role') === 'admin' ? 'Business Profile' : 'Themes');
   const [settings, setSettings] = useState({
     shop_name: '', owner_phone: '', shop_location: '', shop_email: '',
@@ -115,6 +116,11 @@ const Layout = () => {
     });
   };
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [window.location.pathname]);
+
   // Listen for global actions from sidebar
   useEffect(() => {
     const handleAction = (e) => {
@@ -153,7 +159,13 @@ const Layout = () => {
   return (
     <div className="layout-wrapper">
       <div className="mesh-bg" />
-      <Sidebar isCollapsed={isCollapsed} onToggle={toggleSidebar} />
+      
+      {/* Mobile Header Toggle */}
+      <button className="mobile-nav-toggle" onClick={() => setIsMobileOpen(!isMobileOpen)}>
+         {isMobileOpen ? <X size={20} /> : <Settings size={20} />}
+      </button>
+
+      <Sidebar isCollapsed={isCollapsed} onToggle={toggleSidebar} isMobileOpen={isMobileOpen} />
       
       <main className={`main-content ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
         <Outlet />

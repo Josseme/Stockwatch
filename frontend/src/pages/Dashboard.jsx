@@ -92,7 +92,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Metrics */}
-      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
+      <div className="stats-grid">
         <div className="glass-panel metric-card" style={{ padding: '24px' }}>
           <div className="metric-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div className="metric-icon blue" style={{ padding: '10px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', borderRadius: '12px' }}><DollarSign size={20} /></div>
@@ -175,7 +175,7 @@ const Dashboard = () => {
       </div>
 
       {/* Shop Performance & Trends */}
-      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px', marginBottom: '32px' }}>
+      <div className="dashboard-grid">
         <div className="glass-panel metric-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <div className="metric-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div className="metric-icon green" style={{ padding: '10px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', borderRadius: '12px' }}><TrendingUp size={20} /></div>

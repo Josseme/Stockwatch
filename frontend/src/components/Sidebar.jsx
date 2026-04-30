@@ -22,7 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-const Sidebar = ({ isCollapsed, onToggle }) => {
+const Sidebar = ({ isCollapsed, onToggle, isMobileOpen }) => {
   const navigate = useNavigate();
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
@@ -65,7 +65,7 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
   ];
 
   return (
-    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
 
       <div className="sidebar-logo" style={{ 
         padding: '32px 24px', 
