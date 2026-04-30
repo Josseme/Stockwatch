@@ -246,33 +246,6 @@ def initialize_database():
     if "order_id" not in tx_columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN order_id INTEGER")
         
-    # --- ENTERPRISE SCALE INDEXING ---
-    print("AUDIT: Optimizing database indexes for scale...")
-    # Inventory Indexes
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_name ON inventory(name)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_sku ON inventory(sku)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_cat ON inventory(category_id)")
-    
-    # Customer Indexes
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cust_phone ON customers(phone_number)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cust_name ON customers(name)")
-    
-    # Transaction Indexes
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_timestamp ON transactions(timestamp)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_item_id ON transactions(item_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_user_id ON transactions(user_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_cust_id ON transactions(customer_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_order_id ON transactions(order_id)")
-    
-    # Order Indexes
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_timestamp ON orders(timestamp)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_cust_id ON orders(customer_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_user_id ON orders(user_id)")
-    
-    # Analyze the database to optimize query planning
-    cursor.execute("ANALYZE")
-    print("AUDIT: Enterprise optimization complete.")
-
     # 3. Existing Migrations & Seed Data
     cursor.execute("PRAGMA table_info(transactions)")
     tx_columns = [col[1] for col in cursor.fetchall()]
@@ -381,6 +354,33 @@ def initialize_database():
 
     # Backfill missing transaction costs for profit reports
     backfill_transaction_costs(cursor)
+
+    # --- ENTERPRISE SCALE INDEXING ---
+    print("AUDIT: Optimizing database indexes for scale...")
+    # Inventory Indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_name ON inventory(name)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_sku ON inventory(sku)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_cat ON inventory(category_id)")
+    
+    # Customer Indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cust_phone ON customers(phone_number)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cust_name ON customers(name)")
+    
+    # Transaction Indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_timestamp ON transactions(timestamp)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_item_id ON transactions(item_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_user_id ON transactions(user_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_cust_id ON transactions(customer_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_order_id ON transactions(order_id)")
+    
+    # Order Indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_timestamp ON orders(timestamp)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_cust_id ON orders(customer_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_user_id ON orders(user_id)")
+    
+    # Analyze the database to optimize query planning
+    cursor.execute("ANALYZE")
+    print("AUDIT: Enterprise optimization complete.")
 
     conn.commit()
     conn.close()
