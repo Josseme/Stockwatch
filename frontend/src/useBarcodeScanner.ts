@@ -13,9 +13,9 @@ export function useBarcodeScanner(onScan: (barcode: string) => void) {
 
     const currentTime = Date.now();
     
-    // Buffer threshold: hardware scanners typically "type" characters <30ms apart.
-    // If the time between keystrokes exceeds 30ms, clear the buffer.
-    if (currentTime - lastKeyTime.current > 30) {
+    // Buffer threshold: hardware scanners typically "type" characters quickly.
+    // Bluetooth scanners or apps might be slower, so we use 100ms.
+    if (currentTime - lastKeyTime.current > 100) {
       buffer.current = '';
     }
     

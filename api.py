@@ -2,13 +2,17 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 load_dotenv()
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import os
 import jwt
 import bcrypt
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi import Depends, BackgroundTasks
+from fastapi import Depends, BackgroundTasks, Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from mpesa import MpesaGateway
 from database import (
     initialize_database,
     add_item,
@@ -25,12 +29,16 @@ from database import (
     get_all_transactions,
     get_live_users,
     process_checkout,
-    create_user
+    create_user,
+    log_security_event
 )
 from tracker import check_low_stock, send_email_alert
 
 # Initialize FastAPI app
 app = FastAPI(title="Stockwatch API")
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Setup CORS for Local Network Access
 app.add_middleware(
@@ -132,15 +140,27 @@ class ItemCreate(BaseModel):
     name: str
     quantity: int
     threshold: int
-    price: float
+    price: float = Field(..., le=9999999, description="Price cannot exceed 9.9M to prevent accidental barcode scans")
+    cost_price: float = Field(0.0, le=9999999)
     barcode: Optional[str] = None
+    supplier_contact: Optional[str] = None
+    sale_price: Optional[float] = Field(None, le=9999999)
+    sale_start: Optional[str] = None
+    sale_end: Optional[str] = None
+    sale_days: Optional[str] = None
 
 class ItemUpdate(BaseModel):
     name: Optional[str] = None
     quantity: Optional[int] = None
     threshold: Optional[int] = None
-    price: Optional[float] = None
+    price: Optional[float] = Field(None, le=9999999)
+    cost_price: Optional[float] = Field(None, le=9999999)
     barcode: Optional[str] = None
+    supplier_contact: Optional[str] = None
+    sale_price: Optional[float] = Field(None, le=9999999)
+    sale_start: Optional[str] = None
+    sale_end: Optional[str] = None
+    sale_days: Optional[str] = None
 
 class UserCreate(BaseModel):
     username: str
@@ -151,8 +171,20 @@ class CheckoutItem(BaseModel):
     item_id: int
     qty_change: int
 
+class CheckoutRequest(BaseModel):
+    items: List[CheckoutItem]
+    customer_phone: Optional[str] = None
+
 class BarcodeData(BaseModel):
     barcode: str
+    
+class SecurityLogCreate(BaseModel):
+    action_type: str
+    item_name: Optional[str] = None
+
+class CustomerCreate(BaseModel):
+    phone: str
+    name: str
 
 # Startup event to ensure DB is initialized
 @app.on_event("startup")
@@ -161,7 +193,8 @@ def startup_event():
 
 # Endpoints
 @app.post("/api/auth/register")
-def register(user: UserCreate):
+@limiter.limit("5/minute")
+def register(request: Request, user: UserCreate, current_user: dict = Depends(require_admin)):
     from database import create_user
     # Using unified get_password_hash
     success, msg = create_user(user.username.strip(), get_password_hash(user.password), user.role)
@@ -170,22 +203,23 @@ def register(user: UserCreate):
     return {"message": "User registered successfully"}
 
 @app.get("/api/auth/users")
-def list_users():
+def list_users(current_user: dict = Depends(require_admin)):
     users = get_all_users()
     return [{"username": u[0], "role": u[1]} for u in users]
 
 @app.post("/api/auth/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("5/minute")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     from database import get_user_by_username
     username = form_data.username.strip()
     user = get_user_by_username(username)
     
     if not user:
-        print(f"LOGIN FAILED: User '{username}' not found in DB")
+        log_security_event(None, "FAILED_LOGIN_ATTEMPT", f"User: {username}")
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     
     if not verify_password(form_data.password, user[2]):
-        print(f"LOGIN FAILED: Password mismatch for user '{username}'. Provided password length: {len(form_data.password)}")
+        log_security_event(user[0], "FAILED_LOGIN_ATTEMPT", "Incorrect password")
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     
     token = jwt.encode({"sub": user[1], "role": user[3]}, SECRET_KEY, algorithm=ALGORITHM)
@@ -219,24 +253,30 @@ def logout(current_user: dict = Depends(get_current_user)):
     return {"message": "Clocked out successfully"}
 
 @app.get("/api/transactions")
-def get_transactions(current_user: dict = Depends(get_current_user)):
+def get_transactions(current_user: dict = Depends(require_admin)):
     from database import get_all_transactions
     txs = get_all_transactions()
     return [{"id": t[0], "timestamp": t[1], "item_name": t[2], "qty_change": t[3], "username": t[4], "unit_price": t[5]} for t in txs]
 
 @app.post("/api/inventory/checkout")
-def checkout(cart_items: List[CheckoutItem], background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+def checkout(request: CheckoutRequest, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+    from database import get_or_create_customer
+    
     # Prepare items list with names for transaction logging
     items_list = []
     ids_to_check = []
-    for ci in cart_items:
+    for ci in request.items:
         item = get_item_by_id(ci.item_id)
         if not item:
             raise HTTPException(status_code=404, detail=f"Item {ci.item_id} not found")
         items_list.append({"item_id": ci.item_id, "item_name": item[1], "qty_change": ci.qty_change})
         ids_to_check.append(ci.item_id)
 
-    success, msg = process_checkout(items_list, current_user['id'])
+    customer_id = None
+    if request.customer_phone:
+        customer_id = get_or_create_customer(request.customer_phone.strip())
+
+    success, msg = process_checkout(items_list, current_user['id'], customer_id)
     if not success:
         raise HTTPException(status_code=400, detail=msg)
     
@@ -250,32 +290,62 @@ def checkout(cart_items: List[CheckoutItem], background_tasks: BackgroundTasks, 
     return {"message": "Checkout completed successfully"}
 
 @app.post("/api/admin/test-email")
-def test_email(background_tasks: BackgroundTasks):
+def test_email(background_tasks: BackgroundTasks, current_user: dict = Depends(require_admin)):
     """Triggers a test email alert to verify SMTP settings."""
     background_tasks.add_task(send_email_alert, "Test Item", 5, 10)
     return {"message": "Test email triggered. Check logs/email_errors.log for status."}
 
-@app.get("/api/inventory", response_model=List[dict])
+from datetime import datetime
+
+def format_item_response(item, get_item_barcodes):
+    base_price = item[4]
+    sale_price = item[8]
+    sale_start = item[9]
+    sale_end = item[10]
+    sale_days = item[11]
+    
+    is_on_sale = False
+    active_price = base_price
+    
+    if sale_price is not None and sale_start and sale_end and sale_days:
+        now = datetime.now()
+        current_day = now.strftime("%A")[:3] # 'Mon', 'Tue'
+        if current_day in sale_days:
+            current_time = now.strftime("%H:%M")
+            if sale_start <= current_time <= sale_end:
+                active_price = sale_price
+                is_on_sale = True
+
+    return {
+        "id": item[0],
+        "name": item[1],
+        "quantity": item[2],
+        "threshold": item[3],
+        "price": active_price,
+        "original_price": base_price,
+        "is_on_sale": is_on_sale,
+        "barcodes": get_item_barcodes(item[0]),
+        "cost_price": item[6],
+        "supplier_contact": item[7],
+        "sale_price": sale_price,
+        "sale_start": sale_start,
+        "sale_end": sale_end,
+        "sale_days": sale_days
+    }
+
+@app.get("/api/inventory")
 def read_inventory(current_user: dict = Depends(get_current_user)):
     from database import get_all_items, get_item_barcodes
     items = get_all_items()
-    # Convert tuples to dicts for easier frontend handling
-    result = [
-        {
-            "id": item[0],
-            "name": item[1],
-            "quantity": item[2],
-            "threshold": item[3],
-            "price": item[4],
-            "barcodes": get_item_barcodes(item[0])
-        }
-        for item in items
-    ]
-    return result
+    resp = [format_item_response(item, get_item_barcodes) for item in items]
+    if current_user.get("role") != "admin":
+        for item in resp:
+            item["cost_price"] = None
+    return resp
 
 @app.post("/api/inventory")
 def create_item(item: ItemCreate, background_tasks: BackgroundTasks, current_user: dict = Depends(require_admin)):
-    success, msg = add_item(item.name, item.quantity, item.threshold, item.price, current_user['id'], item.barcode)
+    success, msg = add_item(item.name, item.quantity, item.threshold, item.price, item.cost_price, current_user['id'], item.barcode, item.supplier_contact, item.sale_price, item.sale_start, item.sale_end, item.sale_days)
     if not success:
         raise HTTPException(status_code=400, detail=msg)
     
@@ -294,17 +364,15 @@ def update_item(item_id: int, item: ItemUpdate, background_tasks: BackgroundTask
     if not existing_item:
         raise HTTPException(status_code=404, detail="Item not found")
         
-    # Permission Check: Only admins can change core details (name, threshold, price, barcode)
+    # Permission Check: Only admins can change core details
     is_admin = current_user["role"] == "admin"
     if not is_admin:
-        if item.name is not None or item.threshold is not None or item.price is not None or item.barcode is not None:
-            raise HTTPException(status_code=403, detail="Admin privileges required to edit product details (name, price, barcode, etc.)")
-
-    # Update logic
+        if any([item.name, item.threshold, item.price, item.cost_price, item.barcode, item.supplier_contact, item.sale_price, item.sale_start, item.sale_end, item.sale_days]):
+            raise HTTPException(status_code=403, detail="Staff can only update quantity.")
+            
     conn = get_connection()
     cursor = conn.cursor()
     
-    # We update only provided fields
     updates = []
     params = []
     if item.name is not None:
@@ -319,13 +387,31 @@ def update_item(item_id: int, item: ItemUpdate, background_tasks: BackgroundTask
     if item.price is not None:
         updates.append("price = ?")
         params.append(item.price)
+    if item.cost_price is not None:
+        updates.append("cost_price = ?")
+        params.append(item.cost_price)
     if item.barcode is not None:
         updates.append("barcode = ?")
         params.append(item.barcode.strip() if item.barcode else None)
+    if item.supplier_contact is not None:
+        updates.append("supplier_contact = ?")
+        params.append(item.supplier_contact)
+    if item.sale_price is not None:
+        updates.append("sale_price = ?")
+        params.append(item.sale_price)
+    if item.sale_start is not None:
+        updates.append("sale_start = ?")
+        params.append(item.sale_start)
+    if item.sale_end is not None:
+        updates.append("sale_end = ?")
+        params.append(item.sale_end)
+    if item.sale_days is not None:
+        updates.append("sale_days = ?")
+        params.append(item.sale_days)
         
     if not updates:
         return {"message": "No changes provided"}
-        
+
     params.append(item_id)
     query = f"UPDATE inventory SET {', '.join(updates)} WHERE id = ?"
     
@@ -382,7 +468,56 @@ def run_alerts(current_user: dict = Depends(get_current_user)):
 def daily_report(current_user: dict = Depends(require_admin)):
     from database import get_daily_report
     report = get_daily_report()
-    return [{"date": r[0], "sales": r[1], "restock": r[2]} for r in report]
+    return [{"date": r[0], "sales": r[1], "restock": r[2], "profit": r[3]} for r in report]
+
+@app.get("/api/reports/performance")
+def performance_report(current_user: dict = Depends(get_current_user)):
+    from database import get_connection
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Get sales transactions count per user for today
+    cursor.execute('''
+        SELECT u.username, COUNT(t.id) as tx_count
+        FROM transactions t
+        JOIN users u ON t.user_id = u.id
+        WHERE t.qty_change < 0 AND DATE(t.timestamp) = DATE('now', 'localtime')
+        GROUP BY u.id
+        ORDER BY tx_count DESC
+    ''')
+    perf = cursor.fetchall()
+    conn.close()
+    return [{"username": p[0], "transactions": p[1]} for p in perf]
+
+@app.get("/api/inventory/insights")
+def inventory_insights(current_user: dict = Depends(get_current_user)):
+    from database import get_connection
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Calculate avg daily sales over the last 7 days
+    cursor.execute('''
+        SELECT i.id, i.name, i.quantity,
+               COALESCE(SUM(ABS(t.qty_change)) / 7.0, 0) as daily_burn_rate
+        FROM inventory i
+        LEFT JOIN transactions t ON i.id = t.item_id 
+             AND t.qty_change < 0 
+             AND t.timestamp >= datetime('now', '-7 days')
+        GROUP BY i.id
+    ''')
+    data = cursor.fetchall()
+    conn.close()
+    
+    insights = []
+    for r in data:
+        burn_rate = r[3]
+        days_left = (r[2] / burn_rate) if burn_rate > 0 else 999
+        insights.append({
+            "id": r[0],
+            "name": r[1],
+            "quantity": r[2],
+            "burn_rate": round(burn_rate, 2),
+            "days_left": round(days_left, 1)
+        })
+    return insights
 
 @app.post("/api/inventory/{item_id}/barcodes")
 def link_barcode(item_id: int, data: BarcodeData, current_user: dict = Depends(get_current_user)):
@@ -393,10 +528,27 @@ def link_barcode(item_id: int, data: BarcodeData, current_user: dict = Depends(g
     return {"message": msg}
 
 @app.post("/api/barcode/webhook")
-async def barcode_webhook(data: BarcodeData, background_tasks: BackgroundTasks):
-    """Receive barcode from external app and broadcast to frontend via WebSocket."""
-    # Strip whitespace to handle potential newline characters from scanner apps
-    barcode = data.barcode.strip()
+async def barcode_webhook(data: dict, background_tasks: BackgroundTasks):
+    """
+    Receive barcode from external app and broadcast to frontend via WebSocket.
+    Flexible enough to handle various scanner app formats (Barcode to PC, etc.)
+    """
+    # Try to find the barcode in common field names
+    barcode = data.get("barcode") or data.get("text") or data.get("code") or data.get("data")
+    
+    # Handle cases where the app sends a list of scans
+    if not barcode and "barcodes" in data and isinstance(data["barcodes"], list):
+        if len(data["barcodes"]) > 0:
+            first_item = data["barcodes"][0]
+            barcode = first_item.get("barcode") or first_item.get("text")
+
+    if not barcode:
+        print(f"WEBHOOK RECEIVED BUT NO BARCODE FOUND: {data}")
+        return {"status": "error", "message": "No barcode found in payload"}
+
+    barcode = str(barcode).strip()
+    print(f"WEBHOOK SUCCESS: Received barcode {barcode}")
+    
     await manager.broadcast({"type": "BARCODE_SCANNED", "barcode": barcode})
     return {"status": "success", "barcode": barcode}
 
@@ -407,11 +559,76 @@ def scan_item(barcode: str, current_user: dict = Depends(get_current_user)):
     if not item:
         raise HTTPException(status_code=404, detail="Item with this barcode not found")
         
-    return {
-        "id": item[0],
-        "name": item[1],
-        "quantity": item[2],
-        "threshold": item[3],
-        "price": item[4],
-        "barcodes": get_item_barcodes(item[0])
-    }
+    return format_item_response(item, get_item_barcodes)
+
+@app.post("/api/mpesa/stk-push")
+async def mpesa_stk_push(data: dict, current_user: dict = Depends(get_current_user)):
+    phone = data.get("phone")
+    amount = data.get("amount")
+    if not phone or not amount:
+        raise HTTPException(status_code=400, detail="Phone and Amount required")
+    
+    gateway = MpesaGateway()
+    success, response = gateway.stk_push(phone, amount)
+    if success:
+        return response
+    raise HTTPException(status_code=500, detail=response)
+
+@app.post("/api/mpesa/callback")
+async def mpesa_callback(data: dict):
+    # This is called by Safaricom
+    print(f"MPESA CALLBACK RECEIVED: {data}")
+    result_code = data.get("Body", {}).get("stkCallback", {}).get("ResultCode")
+    merchant_request_id = data.get("Body", {}).get("stkCallback", {}).get("MerchantRequestID")
+    
+    if result_code == 0:
+        # Payment Successful
+        await manager.broadcast({
+            "type": "PAYMENT_SUCCESS",
+            "merchant_request_id": merchant_request_id,
+            "message": "M-Pesa Payment Received!"
+        })
+    else:
+        # Payment Failed or Cancelled
+        await manager.broadcast({
+            "type": "PAYMENT_FAILED",
+            "merchant_request_id": merchant_request_id,
+            "message": "M-Pesa Payment Failed or Cancelled"
+        })
+    
+    return {"ResultCode": 0, "ResultDesc": "Success"}
+
+@app.get("/api/reports/daily")
+def get_daily_financial_report(current_user: dict = Depends(require_admin)):
+    from database import get_daily_report
+    report = get_daily_report()
+    return [{"day": r[0], "total_sales": r[1], "total_restock": r[2], "gross_profit": r[3]} for r in report]
+
+@app.get("/api/reports/security")
+def get_security_audit_logs(current_user: dict = Depends(require_admin)):
+    from database import get_security_logs
+    return get_security_logs(limit=100)
+
+@app.post("/api/security/log")
+def log_security_event_api(log: SecurityLogCreate, current_user: dict = Depends(get_current_user)):
+    from database import log_security_event
+    log_security_event(current_user["id"], log.action_type, log.item_name)
+    return {"status": "logged"}
+
+@app.get("/api/security/logs")
+def read_security_logs(limit: int = 50, current_user: dict = Depends(require_admin)):
+    from database import get_security_logs
+    return get_security_logs(limit)
+
+@app.get("/api/customers/search")
+def search_customers_api(q: str, current_user: dict = Depends(get_current_user)):
+    from database import search_customers
+    return search_customers(q)
+
+@app.post("/api/customers")
+def create_customer_api(data: CustomerCreate, current_user: dict = Depends(get_current_user)):
+    from database import add_customer
+    success, msg = add_customer(data.phone, data.name)
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"message": msg}

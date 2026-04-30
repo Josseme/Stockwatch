@@ -40,6 +40,15 @@ def initialize_database():
     ''')
     
     cursor.execute('''
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone_number TEXT NOT NULL UNIQUE,
+            name TEXT,
+            points INTEGER DEFAULT 0
+        )
+    ''')
+    
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -77,12 +86,37 @@ def initialize_database():
             WHERE unit_price IS NULL
         ''')
         cursor.execute("UPDATE transactions SET unit_price = 0.0 WHERE unit_price IS NULL")
+        
+    if "unit_cost" not in tx_columns:
+        cursor.execute("ALTER TABLE transactions ADD COLUMN unit_cost REAL DEFAULT 0.0")
+        
+    if "customer_id" not in tx_columns:
+        cursor.execute("ALTER TABLE transactions ADD COLUMN customer_id INTEGER")
+
     cursor.execute("PRAGMA table_info(inventory)")
     columns = [col[1] for col in cursor.fetchall()]
     if "barcode" not in columns:
         cursor.execute("ALTER TABLE inventory ADD COLUMN barcode TEXT")
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_barcode ON inventory(barcode)")
         
+    if "cost_price" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN cost_price REAL DEFAULT 0.0")
+        
+    if "supplier_contact" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN supplier_contact TEXT")
+        
+    if "sale_price" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN sale_price REAL")
+        
+    if "sale_start" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN sale_start TEXT")
+        
+    if "sale_end" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN sale_end TEXT")
+        
+    if "sale_days" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN sale_days TEXT")
+
     # Default Admin Auto-Create
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
@@ -98,6 +132,17 @@ def initialize_database():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS security_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER NOT NULL,
+            action_type TEXT NOT NULL,
+            item_name TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    ''')
+    
     # Migration: Move existing barcodes from inventory table to item_barcodes
     cursor.execute("SELECT id, barcode FROM inventory WHERE barcode IS NOT NULL")
     existing_barcodes = cursor.fetchall()
@@ -108,14 +153,14 @@ def initialize_database():
     conn.commit()
     conn.close()
 
-def add_item(name, quantity, threshold, price, user_id=None, barcode=None):
+def add_item(name, quantity, threshold, price, cost_price=0.0, user_id=None, barcode=None, supplier_contact=None, sale_price=None, sale_start=None, sale_end=None, sale_days=None):
     conn = get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            INSERT INTO inventory (name, quantity, threshold, price, barcode)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (name, quantity, threshold, price, barcode))
+            INSERT INTO inventory (name, quantity, threshold, price, cost_price, barcode, supplier_contact, sale_price, sale_start, sale_end, sale_days)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (name, quantity, threshold, price, cost_price, barcode, supplier_contact, sale_price, sale_start, sale_end, sale_days))
         new_id = cursor.lastrowid
         
         # Also insert into the new multi-barcode table
@@ -125,9 +170,9 @@ def add_item(name, quantity, threshold, price, user_id=None, barcode=None):
         # Log initial creation transaction if user_id is provided
         if user_id:
             cursor.execute('''
-                INSERT INTO transactions (item_id, item_name, qty_change, user_id)
-                VALUES (?, ?, ?, ?)
-            ''', (new_id, name, quantity, user_id))
+                INSERT INTO transactions (item_id, item_name, qty_change, user_id, unit_price, unit_cost)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (new_id, name, quantity, user_id, price, cost_price))
             
         conn.commit()
         return True, "Item added and initial stock logged."
@@ -148,7 +193,7 @@ def update_quantity(item_id, new_quantity):
 def get_all_items():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, name, quantity, threshold, price, barcode FROM inventory')
+    cursor.execute('SELECT id, name, quantity, threshold, price, barcode, cost_price, supplier_contact, sale_price, sale_start, sale_end, sale_days FROM inventory')
     items = cursor.fetchall()
     conn.close()
     return items
@@ -156,7 +201,7 @@ def get_all_items():
 def get_item_by_id(item_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, name, quantity, threshold, price, barcode FROM inventory WHERE id = ?', (item_id,))
+    cursor.execute('SELECT id, name, quantity, threshold, price, barcode, cost_price, supplier_contact, sale_price, sale_start, sale_end, sale_days FROM inventory WHERE id = ?', (item_id,))
     item = cursor.fetchone()
     conn.close()
     return item
@@ -164,22 +209,36 @@ def get_item_by_id(item_id):
 def get_item_by_barcode(barcode):
     conn = get_connection()
     cursor = conn.cursor()
-    # Search in the new multi-barcode table first
+    # Check item_barcodes table first
     cursor.execute('''
-        SELECT i.id, i.name, i.quantity, i.threshold, i.price, i.barcode 
+        SELECT i.id, i.name, i.quantity, i.threshold, i.price, b.barcode, i.cost_price, i.supplier_contact, i.sale_price, i.sale_start, i.sale_end, i.sale_days
         FROM inventory i
-        JOIN item_barcodes ib ON i.id = ib.item_id
-        WHERE ib.barcode = ?
+        JOIN item_barcodes b ON i.id = b.item_id
+        WHERE b.barcode = ?
     ''', (barcode,))
     item = cursor.fetchone()
     
-    # Fallback to legacy column if not found (though migration should have handled it)
     if not item:
-        cursor.execute('SELECT id, name, quantity, threshold, price, barcode FROM inventory WHERE barcode = ?', (barcode,))
+        # Fallback to legacy barcode column
+        cursor.execute('SELECT id, name, quantity, threshold, price, barcode, cost_price, supplier_contact, sale_price, sale_start, sale_end, sale_days FROM inventory WHERE barcode = ?', (barcode,))
         item = cursor.fetchone()
         
     conn.close()
     return item
+
+def get_or_create_customer(phone_number):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM customers WHERE phone_number = ?", (phone_number,))
+    row = cursor.fetchone()
+    if row:
+        customer_id = row[0]
+    else:
+        cursor.execute("INSERT INTO customers (phone_number) VALUES (?)", (phone_number,))
+        customer_id = cursor.lastrowid
+        conn.commit()
+    conn.close()
+    return customer_id
 
 def add_barcode_to_item(item_id, barcode):
     conn = get_connection()
@@ -275,17 +334,18 @@ def get_live_users():
     conn.close()
     return live
 
-def log_transaction_internal(cursor, item_id, item_name, qty_change, user_id):
+def log_transaction_internal(cursor, item_id, item_name, qty_change, user_id, customer_id=None):
     """Internal helper to log transaction using an existing cursor/connection."""
-    # Fetch current price
-    cursor.execute("SELECT price FROM inventory WHERE id = ?", (item_id,))
+    # Fetch current price and cost
+    cursor.execute("SELECT price, cost_price FROM inventory WHERE id = ?", (item_id,))
     price_row = cursor.fetchone()
     price = price_row[0] if price_row else 0.0
+    cost = price_row[1] if price_row else 0.0
     
     cursor.execute('''
-        INSERT INTO transactions (item_id, item_name, qty_change, user_id, unit_price) 
-        VALUES (?, ?, ?, ?, ?)
-    ''', (item_id, item_name, qty_change, user_id, price))
+        INSERT INTO transactions (item_id, item_name, qty_change, user_id, unit_price, unit_cost, customer_id) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (item_id, item_name, qty_change, user_id, price, cost, customer_id))
 
 def log_transaction(item_id, item_name, qty_change, user_id):
     conn = get_connection()
@@ -319,7 +379,8 @@ def get_daily_report():
         SELECT 
             DATE(timestamp) as day,
             SUM(CASE WHEN qty_change < 0 THEN ABS(qty_change) * unit_price ELSE 0 END) as total_sales,
-            SUM(CASE WHEN qty_change > 0 THEN qty_change * unit_price ELSE 0 END) as total_restock
+            SUM(CASE WHEN qty_change > 0 THEN qty_change * unit_price ELSE 0 END) as total_restock,
+            SUM(CASE WHEN qty_change < 0 THEN ABS(qty_change) * (unit_price - unit_cost) ELSE 0 END) as gross_profit
         FROM transactions
         GROUP BY day
         ORDER BY day DESC
@@ -328,7 +389,77 @@ def get_daily_report():
     conn.close()
     return report
 
-def process_checkout(items_to_update, user_id):
+def log_security_event(user_id, action_type, item_name=None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO security_logs (user_id, action_type, item_name)
+        VALUES (?, ?, ?)
+    ''', (user_id, action_type, item_name))
+    conn.commit()
+    conn.close()
+
+def get_security_logs(limit=50):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.id, s.timestamp, u.username, s.action_type, s.item_name
+        FROM security_logs s
+        JOIN users u ON s.user_id = u.id
+        ORDER BY s.timestamp DESC
+        LIMIT ?
+    ''', (limit,))
+    logs = cursor.fetchall()
+    conn.close()
+    
+    return [
+        {
+            "id": row[0],
+            "timestamp": row[1],
+            "username": row[2],
+            "action_type": row[3],
+            "item_name": row[4]
+        }
+        for row in logs
+    ]
+
+def get_customer_by_phone(phone):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, phone_number, name, points FROM customers WHERE phone_number = ?', (phone,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"id": row[0], "phone": row[1], "name": row[2], "points": row[3]}
+    return None
+
+def search_customers(query):
+    conn = get_connection()
+    cursor = conn.cursor()
+    q = f"%{query}%"
+    cursor.execute('''
+        SELECT id, phone_number, name, points 
+        FROM customers 
+        WHERE phone_number LIKE ? OR name LIKE ? 
+        LIMIT 10
+    ''', (q, q))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "phone": r[1], "name": r[2], "points": r[3]} for r in rows]
+
+def add_customer(phone, name):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('INSERT INTO customers (phone_number, name) VALUES (?, ?)', (phone, name))
+        conn.commit()
+        return True, "Customer registered successfully"
+    except sqlite3.IntegrityError:
+        return False, "Phone number already registered"
+    finally:
+        conn.close()
+
+def process_checkout(items_to_update, user_id, customer_id=None):
     """
     items_to_update: List of dicts like {'item_id': 1, 'item_name': 'Apple', 'qty_change': -2}
     """
@@ -336,24 +467,38 @@ def process_checkout(items_to_update, user_id):
     cursor = conn.cursor()
     try:
         cursor.execute("BEGIN TRANSACTION")
+        
+        # Calculate total spent to award points if there is a customer
+        total_spent = 0
+        
         for update in items_to_update:
             item_id = update['item_id']
             item_name = update['item_name']
             delta = update['qty_change']
             
-            # Fetch current price for snapshot
-            cursor.execute("SELECT price FROM inventory WHERE id = ?", (item_id,))
+            # Fetch current price and cost for snapshot
+            cursor.execute("SELECT price, cost_price FROM inventory WHERE id = ?", (item_id,))
             price_row = cursor.fetchone()
             price = price_row[0] if price_row else 0.0
+            cost = price_row[1] if price_row else 0.0
+            
+            if delta < 0:
+                total_spent += abs(delta) * price
             
             # 1. Update Inventory
             cursor.execute("UPDATE inventory SET quantity = quantity + ? WHERE id = ?", (delta, item_id))
             
-            # 2. Log Transaction with Item Name Snapshot and Price
+            # 2. Log Transaction
             cursor.execute('''
-                INSERT INTO transactions (item_id, item_name, qty_change, user_id, unit_price) 
-                VALUES (?, ?, ?, ?, ?)
-            ''', (item_id, item_name, delta, user_id, price))
+                INSERT INTO transactions (item_id, item_name, qty_change, user_id, unit_price, unit_cost, customer_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (item_id, item_name, delta, user_id, price, cost, customer_id))
+            
+        # Award points to customer if provided
+        if customer_id and total_spent > 0:
+            points_earned = int(total_spent // 100) # 1 point per 100
+            cursor.execute("UPDATE customers SET points = points + ? WHERE id = ?", (points_earned, customer_id))
+            
         
         conn.commit()
         return True, "Checkout processed successfully"

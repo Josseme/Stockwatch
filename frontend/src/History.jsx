@@ -8,12 +8,16 @@ const API_BASE = `http://${window.location.hostname}:8000/api`;
 export default function History() {
   const [logs, setLogs] = useState([]);
   const [report, setReport] = useState([]);
+  const [securityLogs, setSecurityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const isAdmin = localStorage.getItem('role') === 'admin';
 
   useEffect(() => {
     fetchLogs();
-    if (isAdmin) fetchReport();
+    if (isAdmin) {
+      fetchReport();
+      fetchSecurityLogs();
+    }
   }, [isAdmin]);
 
   const fetchLogs = async () => {
@@ -38,6 +42,13 @@ export default function History() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const fetchSecurityLogs = async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/security/logs`);
+      if (res.ok) setSecurityLogs(await res.json());
+    } catch (err) { console.error(err); }
   };
 
   return (
@@ -83,12 +94,12 @@ export default function History() {
 
           <div className="glass-panel metric-card">
             <div className="metric-icon blue" style={{ background: 'rgba(96, 165, 250, 0.1)', color: 'var(--accent-primary)' }}>
-              <Calendar size={24} />
+              <TrendingUp size={24} />
             </div>
             <div className="metric-info">
-              <h3>Current Session</h3>
-              <p>{new Date().toLocaleDateString()}</p>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Reporting period</span>
+              <h3>Net Profit (Today)</h3>
+              <p>Ksh {report[0]?.profit ? report[0].profit.toLocaleString() : 0}</p>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Gross profit from sales</span>
             </div>
           </div>
         </div>
@@ -158,6 +169,39 @@ export default function History() {
           </div>
         )}
       </div>
+
+      {isAdmin && securityLogs.length > 0 && (
+        <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginTop: '32px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', background: 'rgba(239, 68, 68, 0.05)' }}>
+             <h2 style={{ fontSize: '1.1rem', margin: 0, color: 'var(--accent-danger)' }}>Loss Prevention Alerts (Security)</h2>
+          </div>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Operator</th>
+                  <th>Action Flagged</th>
+                  <th>Item Affected</th>
+                </tr>
+              </thead>
+              <tbody>
+                {securityLogs.map(log => (
+                  <tr key={log.id}>
+                    <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      {new Date(log.timestamp + 'Z').toLocaleString()}
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{log.username}</td>
+                    <td style={{ color: 'var(--accent-danger)', fontWeight: 700 }}>{log.action_type}</td>
+                    <td>{log.item_name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -264,9 +264,10 @@ th {
 }
 
 td {
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 0.95rem;
+  vertical-align: middle;
 }
 
 tbody tr {
@@ -489,4 +490,90 @@ tbody tr:hover {
 @keyframes pulse-ring {
   0% { transform: scale(1); opacity: 0.8; }
   100% { transform: scale(3.5); opacity: 0; }
+}
+
+.flex-align {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.advanced-settings {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  border: 1px solid var(--panel-border);
+}
+
+.advanced-settings summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-secondary);
+  list-style: none;
+  transition: var(--transition-smooth);
+}
+
+.advanced-settings summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-settings summary:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.advanced-content {
+  padding: 16px;
+  border-top: 1px solid var(--panel-border);
+  animation: slideDown 0.3s ease-out;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scanned Item Highlights */
+.highlight-row {
+  position: relative;
+  transition: background 0.3s ease;
+}
+
+.highlight-row.sale {
+  background: rgba(59, 130, 246, 0.1) !important;
+  box-shadow: inset 4px 0 0 var(--accent-primary);
+}
+
+.highlight-row.restock {
+  background: rgba(52, 211, 153, 0.1) !important;
+  box-shadow: inset 4px 0 0 var(--accent-secondary);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes flash-glow {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+  100% { filter: brightness(1); }
+}
+
+.highlight-row {
+  animation: flash-glow 1s ease-in-out;
 }

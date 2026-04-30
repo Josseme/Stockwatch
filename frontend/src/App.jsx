@@ -5,6 +5,7 @@ import Register from './Register';
 import Inventory from './Inventory';
 import History from './History';
 import Attendance from './Attendance';
+import Reports from './Reports';
 
 // Simple Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -27,6 +28,15 @@ function App() {
         element={
           <ProtectedRoute>
             <Attendance />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <Reports />
           </ProtectedRoute>
         }
       />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Package, AlertTriangle, Plus, Trash2, Mail, Check, X, Bell, History as HistoryIcon, TrendingUp, Users, Camera, Smartphone, Link as LinkIcon, Bluetooth } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useBarcodeScanner } from './useBarcodeScanner';
@@ -19,13 +19,37 @@ export default function Inventory() {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [cart, setCart] = useState([]);
-  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [isAutoCheckout, setIsAutoCheckout] = useState(false);
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [insights, setInsights] = useState([]);
+  const [performance, setPerformance] = useState([]);
+  const [receiptData, setReceiptData] = useState(null);
+  const [highlight, setHighlight] = useState({ id: null, type: null });
+  const [activeCustomer, setActiveCustomer] = useState(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState([]);
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [mpesaCode, setMpesaCode] = useState('');
+  const [isWaitingForPayment, setIsWaitingForPayment] = useState(false);
   
   const navigate = useNavigate();
   // New Item Form State
-  const [newItem, setNewItem] = useState({ name: '', quantity: '', threshold: '', price: '', barcode: '' });
+  const [newItem, setNewItem] = useState({ 
+    name: '', quantity: '', threshold: '', price: '', cost_price: '', barcode: '', 
+    supplier_contact: '', sale_price: '', sale_start: '', sale_end: '', sale_days: '' 
+  });
   const userRole = localStorage.getItem('role');
   const isAdmin = userRole === 'admin';
+  const itemRefs = useRef({});
+
+  useEffect(() => {
+    if (highlight.id && itemRefs.current[highlight.id]) {
+      itemRefs.current[highlight.id].scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }
+  }, [highlight.id]);
 
   // Shared Scan Handler
   const handleScan = async (barcode) => {
@@ -45,11 +69,16 @@ export default function Inventory() {
       const item = await res.json();
       const delta = scanMode === 'sales' ? -1 : 1;
 
-      if (isBatchMode) {
-        addToCart(item, delta);
+      // Always add to cart first in the new Unified Workflow
+      addToCart(item, delta);
+      
+      if (isAutoCheckout && scanMode === 'sales') {
+        addToast(`Auto-processing ${item.name}...`, 'info');
+        // Use a tiny timeout to allow the cart state to update visually before processing
+        setTimeout(() => handleCheckout(), 100);
       } else {
-        await updateQuantity(item.id, item.quantity, delta);
         addToast(`${scanMode === 'sales' ? 'Sold' : 'Restocked'} 1x ${item.name}`, 'success');
+        triggerHighlight(item.id, scanMode);
       }
       
     } catch (err) {
@@ -61,31 +90,189 @@ export default function Inventory() {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
       if (existing) {
-        // If switching modes (e.g. from Sales to Restock while item in cart), handle accordingly
-        // For simplicity, we just add the delta
         return prev.map(i => i.id === item.id ? { ...i, qty_change: i.qty_change + delta } : i);
       }
-      return [...prev, { id: item.id, name: item.name, price: item.price, qty_change: delta }];
+      const displayName = item.name || `Product #${item.id}`;
+      return [...prev, { id: item.id, name: displayName, price: item.price, qty_change: delta }];
     });
-    addToast(`Added ${item.name} to batch`, 'info');
   };
 
   const removeFromCart = (id) => {
+    const itemToRemove = cart.find(i => i.id === id);
+    if (itemToRemove) {
+      // Security Flag: Log Cart Deletion (Suspicious activity)
+      authFetch(`${API_BASE}/security/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action_type: 'Cart Deletion', item_name: itemToRemove.name })
+      }).catch(err => console.error('Failed to log security event', err));
+    }
     setCart(prev => prev.filter(i => i.id !== id));
+  };
+
+  const handleCustomerSearch = async (val) => {
+    setCustomerSearch(val);
+    if (val.length < 3) {
+      setCustomerResults([]);
+      return;
+    }
+    try {
+      const res = await authFetch(`${API_BASE}/customers/search?q=${val}`);
+      if (res.ok) setCustomerResults(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const handleStkPush = async () => {
+    const phone = activeCustomer?.phone || customerPhone;
+    if (!phone) {
+      addToast("Please provide a phone number", "error");
+      return;
+    }
+    const amount = cart.reduce((acc, i) => acc + (i.price * Math.abs(i.qty_change)), 0);
+    setIsWaitingForPayment(true);
+    try {
+      const res = await authFetch(`${API_BASE}/mpesa/stk-push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, amount })
+      });
+      if (res.ok) {
+        addToast("STK Push Sent. Awaiting payment...", "info");
+      } else {
+        setIsWaitingForPayment(false);
+        const err = await res.json();
+        addToast(err.detail || "STK Push failed", "error");
+      }
+    } catch (err) {
+      setIsWaitingForPayment(false);
+      addToast(err.message, "error");
+    }
+  };
+
+  const handleCreateCustomer = async () => {
+    const phone = prompt("Enter Phone Number:");
+    const name = prompt("Enter Customer Name:");
+    if (!phone || !name) return;
+    try {
+      const res = await authFetch(`${API_BASE}/customers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, name })
+      });
+      if (res.ok) {
+        addToast("Customer registered!");
+        setActiveCustomer({ phone, name, points: 0 });
+      } else {
+        const err = await res.json();
+        addToast(err.detail, 'error');
+      }
+    } catch (err) { addToast(err.message, 'error'); }
   };
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     try {
+      const currentCart = [...cart];
+      const currentPhone = activeCustomer?.phone || customerPhone;
+      
       const res = await authFetch(`${API_BASE}/inventory/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cart.map(i => ({ item_id: i.id, qty_change: i.qty_change })))
+        body: JSON.stringify({
+          items: currentCart.map(i => ({ item_id: i.id, qty_change: i.qty_change })),
+          customer_phone: currentPhone || null
+        })
       });
       if (res.ok) {
         addToast('Batch processed successfully!', 'success');
+        
+        if (currentPhone) {
+          const total = currentCart.reduce((acc, i) => acc + (i.price * Math.abs(i.qty_change)), 0);
+          const savings = currentCart.reduce((acc, i) => {
+            if (i.qty_change < 0 && i.is_on_sale && i.original_price) {
+              return acc + (i.original_price - i.price) * Math.abs(i.qty_change);
+            }
+            return acc;
+          }, 0);
+          
+          const vatBase = total / 1.16;
+          const vatAmount = total - vatBase;
+          const points = Math.floor(total / 100);
+          const txId = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const dateStr = new Date().toLocaleString();
+          const custName = activeCustomer?.name || "Valued Customer";
+
+          let text = `━━━━━━━━━━━━━━━━━━━━━━\n`;
+          text += `🛍️ *SMARTSTOCK SUPERMARKET*\n`;
+          text += `_Branch: Mombasa CBD_\n`;
+          text += `Contact: +254 700 000 000\n`;
+          text += `PIN: P051234567Z\n`;
+          text += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+          
+          text += `*OFFICIAL FISCAL RECEIPT*\n`;
+          text += `RCPT: #${txId} | TERM: T-01\n`;
+          text += `DATE: ${dateStr}\n`;
+          text += `CASHIER: ${localStorage.getItem('username')?.toUpperCase() || 'STAFF'}\n\n`;
+          
+          text += `👤 *CUSTOMER:* ${custName}\n\n`;
+          
+          text += `*QTY  DESCRIPTION      TOTAL*\n`;
+          text += `──────────────────────\n`;
+          currentCart.forEach(item => {
+            const itemTotal = item.price * Math.abs(item.qty_change);
+            const desc = item.is_on_sale ? `${item.name} <S>` : item.name;
+            text += `${Math.abs(item.qty_change).toString().padEnd(4)} ${desc.padEnd(14)} ${itemTotal.toLocaleString()} (A)\n`;
+            if (item.is_on_sale) {
+              text += `     _Disc Saved: Ksh ${(item.original_price - item.price).toFixed(2)}_\n`;
+            }
+          });
+          text += `──────────────────────\n`;
+          
+          text += `SUBTOTAL:        Ksh ${total.toLocaleString()}\n`;
+          if (savings > 0) {
+            text += `*TOTAL SAVINGS:   Ksh ${savings.toLocaleString()}*\n`;
+          }
+          
+          text += `\n*TAX BREAKDOWN (VAT 16%)*\n`;
+          text += `Taxable:         Ksh ${vatBase.toLocaleString(undefined, {minimumFractionDigits: 2})}\n`;
+          text += `VAT Amount:      Ksh ${vatAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}\n`;
+          
+          text += `\n*GRAND TOTAL:    Ksh ${total.toLocaleString()}*\n`;
+          text += `──────────────────────\n`;
+          text += `PAYMENT:         ${paymentMethod.toUpperCase()}\n`;
+          if (paymentMethod === 'M-Pesa' && mpesaCode) {
+            text += `MPESA REF:       ${mpesaCode.toUpperCase()}\n`;
+          }
+          
+          text += `\n✨ *LOYALTY PROGRAM*\n`;
+          text += `Points Earned:   ${points} pts\n`;
+          text += `New Balance:     _(Visit Shop)_\n\n`;
+          
+          text += `📜 *POLICY:* Returns within 7 days with original receipt. No cash refunds.\n\n`;
+          text += `🙏 *THANK YOU FOR SHOPPING!*\n`;
+          text += `QR: stockwatch.biz/verify/${txId}\n`;
+          text += `━━━━━━━━━━━━━━━━━━━━━━`;
+          
+          let formattedPhone = currentPhone.replace(/\D/g, '');
+          if (formattedPhone.startsWith('0')) {
+            formattedPhone = '254' + formattedPhone.substring(1);
+          } else if (formattedPhone.startsWith('7')) {
+            formattedPhone = '254' + formattedPhone;
+          }
+          
+          setReceiptData({
+            phone: formattedPhone,
+            text: encodeURIComponent(text)
+          });
+        }
+        
         setCart([]);
+        setCustomerPhone('');
+        setActiveCustomer(null);
+        setCustomerSearch('');
+        setMpesaCode('');
         fetchInventory();
+        fetchPerformance();
       } else {
         const error = await res.json();
         addToast(error.detail || 'Checkout failed', 'error');
@@ -122,6 +309,13 @@ export default function Inventory() {
           fetchInventory();
         } else if (data.type === 'BARCODE_SCANNED') {
           handleScan(data.barcode);
+        } else if (data.type === 'PAYMENT_SUCCESS') {
+          setIsWaitingForPayment(false);
+          addToast("M-Pesa Payment Received!", "success");
+          // Optionally auto-trigger checkout here
+        } else if (data.type === 'PAYMENT_FAILED') {
+          setIsWaitingForPayment(false);
+          addToast("M-Pesa Payment Failed", "error");
         }
       };
       ws.onclose = () => {
@@ -133,8 +327,24 @@ export default function Inventory() {
     return () => { if (ws) ws.close(); };
   }, []);
 
+  const fetchInsights = async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/inventory/insights`);
+      if (res.ok) setInsights(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchPerformance = async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/reports/performance`);
+      if (res.ok) setPerformance(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
   useEffect(() => {
     fetchInventory();
+    fetchInsights();
+    fetchPerformance();
     if (isAdmin) {
       fetchLiveStaff();
       const interval = setInterval(fetchLiveStaff, 30000); // Poll every 30s
@@ -174,7 +384,10 @@ export default function Inventory() {
   };
 
   const handleRegisterNew = () => {
-    setNewItem({ name: '', quantity: '', threshold: '', price: '', barcode: unrecognizedBarcode });
+    setNewItem({ 
+      name: '', quantity: '', threshold: '', price: '', cost_price: '', barcode: unrecognizedBarcode,
+      supplier_contact: '', sale_price: '', sale_start: '', sale_end: '', sale_days: '' 
+    });
     setIsLinkModalOpen(false);
     setIsModalOpen(true);
   };
@@ -212,14 +425,23 @@ export default function Inventory() {
       quantity: parseInt(newItem.quantity),
       threshold: parseInt(newItem.threshold),
       price: parseFloat(newItem.price),
+      cost_price: parseFloat(newItem.cost_price || 0),
       barcode: newItem.barcode || null,
+      supplier_contact: newItem.supplier_contact || null,
+      sale_price: newItem.sale_price ? parseFloat(newItem.sale_price) : null,
+      sale_start: newItem.sale_start || null,
+      sale_end: newItem.sale_end || null,
+      sale_days: newItem.sale_days || null,
       isOptimistic: true
     };
 
     // Optimistic Update
     setItems(prev => [...prev, itemToAdd]);
     setIsModalOpen(false);
-    setNewItem({ name: '', quantity: '', threshold: '', price: '', barcode: '' });
+    setNewItem({ 
+      name: '', quantity: '', threshold: '', price: '', cost_price: '', barcode: '',
+      supplier_contact: '', sale_price: '', sale_start: '', sale_end: '', sale_days: ''
+    });
 
     try {
       const res = await authFetch(`${API_BASE}/inventory`, {
@@ -230,7 +452,13 @@ export default function Inventory() {
           quantity: itemToAdd.quantity,
           threshold: itemToAdd.threshold,
           price: itemToAdd.price,
-          barcode: itemToAdd.barcode
+          cost_price: itemToAdd.cost_price,
+          barcode: itemToAdd.barcode,
+          supplier_contact: itemToAdd.supplier_contact,
+          sale_price: itemToAdd.sale_price,
+          sale_start: itemToAdd.sale_start,
+          sale_end: itemToAdd.sale_end,
+          sale_days: itemToAdd.sale_days
         })
       });
       if (!res.ok) throw new Error('Failed to add item');
@@ -244,7 +472,12 @@ export default function Inventory() {
     }
   };
 
-  const updateQuantity = async (id, currentQty, delta) => {
+  const triggerHighlight = (id, type) => {
+    setHighlight({ id, type });
+    setTimeout(() => setHighlight({ id: null, type: null }), 3000);
+  };
+
+  const updateQuantity = async (id, currentQty, delta, fromScan = false) => {
     const newQty = parseInt(currentQty) + delta;
     if (newQty < 0) return; // Prevent negative stock
     
@@ -266,6 +499,10 @@ export default function Inventory() {
       const item = items.find(i => i.id === id);
       if (item && newQty < item.threshold && currentQty >= item.threshold) {
          addToast(`Low stock alert triggered for ${item.name}`, 'warning');
+      }
+      
+      if (!fromScan) {
+        triggerHighlight(id, delta > 0 ? 'restock' : 'sales');
       }
     } catch (err) {
       addToast(err.message, 'error');
@@ -322,6 +559,12 @@ export default function Inventory() {
           <Link to="/history" className="btn btn-ghost">
             <HistoryIcon size={18} /> View History
           </Link>
+
+          {isAdmin && (
+            <Link to="/reports" className="btn btn-ghost" style={{ color: 'var(--accent-primary)' }}>
+              <TrendingUp size={18} /> Audits
+            </Link>
+          )}
 
           <button className="btn btn-ghost" onClick={checkAlerts}>
             <Bell size={18} /> Alerts
@@ -417,6 +660,19 @@ export default function Inventory() {
             <p>{totalItems}</p>
           </div>
         </div>
+
+        {performance.length > 0 && (
+          <div className="glass-panel metric-card" style={{ gridColumn: 'span 1' }}>
+            <div className="metric-icon blue" style={{ background: 'rgba(234, 179, 8, 0.1)', color: '#eab308' }}>
+              <TrendingUp size={28} />
+            </div>
+            <div className="metric-info">
+              <h3>Top Cashier (Today)</h3>
+              <p style={{ fontSize: '1.2rem' }}>{performance[0].username}</p>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{performance[0].transactions} Sales</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Table Panel */}
@@ -454,17 +710,17 @@ export default function Inventory() {
 
               <div style={{ width: '1px', height: '16px', background: 'var(--panel-border)' }}></div>
 
-              {/* Multi-Scan Toggle (Compact) */}
+              {/* Auto-Checkout Toggle (Compact) */}
               <div 
-                onClick={() => setIsBatchMode(!isBatchMode)}
+                onClick={() => setIsAutoCheckout(!isAutoCheckout)}
                 style={{ 
                   display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', 
-                  color: isBatchMode ? 'var(--accent-primary)' : 'var(--text-muted)',
+                  color: isAutoCheckout ? 'var(--accent-primary)' : 'var(--text-muted)',
                   fontSize: '0.75rem', fontWeight: 600, padding: '0 4px'
                 }}
               >
-                <Bluetooth size={14} />
-                {isBatchMode ? 'Multi-Scan ON' : 'Single Scan'}
+                <Smartphone size={14} />
+                {isAutoCheckout ? 'Auto-Checkout ON' : 'Manual Cart'}
               </div>
             </div>
 
@@ -486,19 +742,30 @@ export default function Inventory() {
             <table>
               <thead>
                 <tr>
-                  <th>Product Details</th>
-                  <th>Unit Price</th>
-                  <th>Quantity</th>
-                  <th>Threshold</th>
-                  <th>Live Status</th>
+                  <th style={{ textAlign: 'left' }}>Product Details</th>
+                  <th style={{ textAlign: 'center' }}>Unit Price</th>
+                  <th style={{ textAlign: 'center' }}>Quantity</th>
+                  <th style={{ textAlign: 'center' }}>Burn Status</th>
+                  <th style={{ textAlign: 'center' }}>Live Status</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, index) => {
                   const isLow = item.quantity < item.threshold;
+                  const isHighlighted = highlight.id === item.id;
+                  const highlightType = highlight.type === 'restock' ? 'restock' : 'sale';
+                  
                   return (
-                    <tr key={item.id} style={{ opacity: item.isOptimistic ? 0.5 : 1, animation: `fadeIn 0.4s ease-out ${index * 0.03}s both` }}>
+                    <tr 
+                      key={item.id} 
+                      ref={el => itemRefs.current[item.id] = el}
+                      className={isHighlighted ? `highlight-row ${highlightType}` : ''}
+                      style={{ 
+                        opacity: item.isOptimistic ? 0.5 : 1, 
+                        animation: isHighlighted ? '' : `fadeIn 0.4s ease-out ${index * 0.03}s both` 
+                      }}
+                    >
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                            <div style={{ position: 'relative' }}>
@@ -512,19 +779,50 @@ export default function Inventory() {
                            )}
                         </div>
                       </td>
-                      <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Ksh {item.price.toFixed(2)}</td>
-                      <td>
-                        <div className="qty-controls">
+                      <td style={{ textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                        <div className="flex-col" style={{ alignItems: 'center' }}>
+                          {item.is_on_sale ? (
+                            <>
+                              <span style={{ color: '#eab308', fontWeight: 700, fontSize: '1rem' }}>⚡ Ksh {item.price.toFixed(2)}</span>
+                              <span style={{ fontSize: '0.7rem', textDecoration: 'line-through', opacity: 0.5 }}>Ksh {item.original_price?.toFixed(2)}</span>
+                            </>
+                          ) : (
+                            <span style={{ fontWeight: 600 }}>Ksh {item.price.toFixed(2)}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div className="qty-controls" style={{ display: 'inline-flex' }}>
                           <button className="qty-btn" onClick={() => updateQuantity(item.id, item.quantity, -1)}>-</button>
                           <span style={{ width: '40px', textAlign: 'center', fontWeight: '700', fontSize: '1.1rem' }}>{item.quantity}</span>
                           <button className="qty-btn" onClick={() => updateQuantity(item.id, item.quantity, 1)}>+</button>
                         </div>
                       </td>
-                      <td style={{ color: 'var(--text-muted)' }}>{item.threshold}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--accent-secondary)', fontWeight: 500 }}>
+                        {insights.find(i => i.id === item.id)?.days_left < 999 
+                          ? `${insights.find(i => i.id === item.id).days_left} Days Left` 
+                          : 'Stable'}
+                      </td>
                       <td>
-                        <span className={`status-badge ${isLow ? 'low' : 'ok'}`}>
-                          {isLow ? 'Critical Low' : 'Nominal'}
-                        </span>
+                        <div className="flex-align" style={{ justifyContent: 'center' }}>
+                          <span className={`status-badge ${isLow ? 'low' : 'ok'}`}>
+                            {isLow ? 'Critical Low' : 'Nominal'}
+                          </span>
+                          {isLow && item.supplier_contact && (
+                            <a 
+                              href={(() => {
+                                let p = item.supplier_contact.replace(/\D/g, '');
+                                if (p.startsWith('0')) p = '254' + p.substring(1);
+                                else if (p.startsWith('7')) p = '254' + p;
+                                return `https://api.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(`Hello, we need a restock of ${item.name}.`)}`;
+                              })()}
+                              target="_blank" rel="noreferrer"
+                              className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '8px' }}
+                            >
+                              Order
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         {isAdmin && (
@@ -574,14 +872,56 @@ export default function Inventory() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label>Unit Price (Ksh)</label>
-                <input type="number" required min="0" step="0.01" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} placeholder="0.00" />
+                <label>Unit Price (Sale)</label>
+                <input type="number" required min="0" max="9999999" step="0.01" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} placeholder="0.00" />
               </div>
+              <div className="form-group">
+                <label>Buying Price (Cost)</label>
+                <input type="number" required min="0" max="9999999" step="0.01" value={newItem.cost_price} onChange={e => setNewItem({...newItem, cost_price: e.target.value})} placeholder="0.00" />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
                 <label>Barcode (Optional)</label>
                 <input type="text" value={newItem.barcode} onChange={e => setNewItem({...newItem, barcode: e.target.value})} placeholder="Scan barcode..." />
               </div>
+              <div className="form-group">
+                <label>Supplier Contact (Optional)</label>
+                <input type="text" value={newItem.supplier_contact} onChange={e => setNewItem({...newItem, supplier_contact: e.target.value})} placeholder="Phone or Email" />
+              </div>
             </div>
+
+            <details className="advanced-settings">
+              <summary>
+                <div className="flex-align">
+                  <TrendingUp size={16} />
+                  Advanced: Happy Hour Pricing
+                </div>
+              </summary>
+              <div className="advanced-content">
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label>Sale Price (Ksh)</label>
+                    <input type="number" min="0" max="9999999" step="0.01" value={newItem.sale_price} onChange={e => setNewItem({...newItem, sale_price: e.target.value})} placeholder="0.00" />
+                  </div>
+                  <div className="form-group">
+                    <label>Active Days</label>
+                    <input type="text" value={newItem.sale_days} onChange={e => setNewItem({...newItem, sale_days: e.target.value})} placeholder="Mon,Tue,Wed..." />
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label>Start Time</label>
+                    <input type="time" value={newItem.sale_start} onChange={e => setNewItem({...newItem, sale_start: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>End Time</label>
+                    <input type="time" value={newItem.sale_end} onChange={e => setNewItem({...newItem, sale_end: e.target.value})} />
+                  </div>
+                </div>
+              </div>
+            </details>
             
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>Cancel</button>
@@ -668,14 +1008,14 @@ export default function Inventory() {
           position: 'fixed', 
           bottom: '24px', 
           right: '24px', 
-          width: '350px', 
-          maxHeight: '500px', 
+          width: '450px', 
+          maxHeight: '80vh', 
           zIndex: 100, 
           display: 'flex', 
           flexDirection: 'column',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          animation: 'slideUp 0.3s ease-out'
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          animation: 'slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
           <div style={{ padding: '16px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
              <h3 style={{ margin: 0, fontSize: '1rem' }}>Pending Batch ({cart.length})</h3>
@@ -700,13 +1040,143 @@ export default function Inventory() {
             ))}
           </div>
           <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderTop: '1px solid var(--panel-border)' }}>
+             {activeCustomer ? (
+               <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', border: '1px solid var(--accent-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                 <div>
+                   <div style={{ fontSize: '0.7rem', color: 'var(--accent-primary)', fontWeight: 700, textTransform: 'uppercase' }}>Active Session</div>
+                   <div style={{ fontWeight: 600 }}>{activeCustomer.name}</div>
+                   <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{activeCustomer.phone} • {activeCustomer.points} pts</div>
+                 </div>
+                 <button className="btn-ghost" onClick={() => setActiveCustomer(null)} style={{ padding: '4px' }}><X size={14} /></button>
+               </div>
+             ) : (
+               <div className="form-group" style={{ marginBottom: '12px', position: 'relative' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Search Customer / Phone..." 
+                    value={customerSearch}
+                    onChange={e => handleCustomerSearch(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', fontSize: '0.85rem', padding: '8px 12px' }}
+                  />
+                  {customerResults.length > 0 && (
+                    <div className="glass-panel" style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, maxHeight: '200px', overflowY: 'auto', zIndex: 1000, padding: '8px', marginBottom: '8px' }}>
+                      {customerResults.map(c => (
+                        <div 
+                          key={c.id} 
+                          onClick={() => { setActiveCustomer(c); setCustomerResults([]); }}
+                          style={{ padding: '8px', cursor: 'pointer', borderRadius: '6px', borderBottom: '1px solid var(--panel-border)' }}
+                          onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                          onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{c.name}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{c.phone}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {customerSearch.length >= 3 && customerResults.length === 0 && (
+                    <button 
+                      onClick={handleCreateCustomer}
+                      style={{ marginTop: '8px', width: '100%', fontSize: '0.75rem', color: 'var(--accent-primary)', background: 'transparent', border: '1px dashed var(--accent-primary)', padding: '6px', borderRadius: '6px', cursor: 'pointer' }}
+                    >
+                      + Register New Customer
+                    </button>
+                  )}
+               </div>
+             )}
+
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+                <button 
+                  className={`btn ${paymentMethod === 'Cash' ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ fontSize: '0.75rem', padding: '8px' }}
+                  onClick={() => setPaymentMethod('Cash')}
+                >
+                  💵 Cash
+                </button>
+                <button 
+                  className={`btn ${paymentMethod === 'M-Pesa' ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ fontSize: '0.75rem', padding: '8px' }}
+                  onClick={() => setPaymentMethod('M-Pesa')}
+                >
+                  📱 M-Pesa
+                </button>
+             </div>
+
+             {paymentMethod === 'M-Pesa' && (
+               <div style={{ marginBottom: '12px' }}>
+                 <div className="form-group" style={{ marginBottom: '8px' }}>
+                   <input 
+                     type="text" 
+                     placeholder="M-Pesa Ref (e.g. QWE123RTY)" 
+                     value={mpesaCode}
+                     onChange={e => setMpesaCode(e.target.value)}
+                     style={{ background: 'rgba(255,255,255,0.05)', fontSize: '0.85rem', padding: '8px 12px' }}
+                   />
+                 </div>
+                 <button 
+                   className="btn btn-primary" 
+                   onClick={handleStkPush}
+                   disabled={isWaitingForPayment || !(activeCustomer?.phone || customerPhone)}
+                   style={{ 
+                     width: '100%', padding: '10px', 
+                     background: (isWaitingForPayment || !(activeCustomer?.phone || customerPhone)) ? 'rgba(255,255,255,0.05)' : '#25D366', 
+                     color: (isWaitingForPayment || !(activeCustomer?.phone || customerPhone)) ? 'var(--text-muted)' : '#000', 
+                     fontWeight: 700, fontSize: '0.85rem' 
+                   }}
+                 >
+                   {isWaitingForPayment 
+                     ? '⏳ Waiting for PIN...' 
+                     : !(activeCustomer?.phone || customerPhone) 
+                       ? '⚠️ Enter Phone Number Above' 
+                       : '📲 Send M-Pesa STK Push'}
+                 </button>
+               </div>
+             )}
+
              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontWeight: 700 }}>
                 <span>Batch Total</span>
                 <span>Ksh {cart.reduce((acc, i) => acc + (i.price * Math.abs(i.qty_change)), 0).toLocaleString()}</span>
              </div>
-             <button className="btn btn-primary" style={{ width: '100%', py: '12px' }} onClick={handleCheckout}>
+             <button className="btn btn-primary" style={{ width: '100%', padding: '12px' }} onClick={handleCheckout}>
                 Process Batch Scans
              </button>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Receipt Modal */}
+      {receiptData && (
+        <div className="modal-overlay active" onClick={() => setReceiptData(null)}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', color: '#25D366' }}>
+              <Smartphone size={48} />
+            </div>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '8px' }}>Send Digital Receipt</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem' }}>
+              Would you like to send the customer a WhatsApp receipt for this transaction?
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <a 
+                href={`https://api.whatsapp.com/send?phone=${receiptData.phone}&text=${receiptData.text}`} 
+                target="messaging_tab" 
+                rel="noreferrer"
+                className="btn btn-primary" 
+                style={{ background: '#25D366', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                onClick={() => setReceiptData(null)}
+              >
+                WhatsApp
+              </a>
+              <a 
+                href={`sms:${receiptData.phone}?body=${receiptData.text}`} 
+                target="messaging_tab"
+                className="btn btn-primary" 
+                style={{ background: '#3b82f6', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                onClick={() => setReceiptData(null)}
+              >
+                SMS
+              </a>
+            </div>
+            <button className="btn btn-ghost" style={{ width: '100%', marginTop: '12px' }} onClick={() => setReceiptData(null)}>Skip Receipt</button>
           </div>
         </div>
       )}
