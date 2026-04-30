@@ -7,7 +7,7 @@ TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
 
 if TURSO_URL:
-    import libsql_experimental as libsql
+    import libsql as libsql
     print(f"DATABASE: Using Cloud Turso DB ({TURSO_URL[:15]}...)")
 else:
     libsql = None

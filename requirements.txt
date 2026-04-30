@@ -4,7 +4,7 @@ uvicorn[standard]
 pydantic
 PyJWT
 passlib[bcrypt]
-libsql-experimental
+libsql
 slowapi
 bcrypt
 python-multipart
