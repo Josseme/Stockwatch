@@ -64,7 +64,8 @@ def initialize_database():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL,
             permissions TEXT,
-            is_active BOOLEAN DEFAULT 1
+            is_active BOOLEAN DEFAULT 1,
+            pin TEXT
         )
     ''')
 
@@ -274,6 +275,8 @@ def initialize_database():
         cursor.execute("ALTER TABLE users ADD COLUMN permissions TEXT")
     if "is_active" not in user_columns:
         cursor.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
+    if "pin" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN pin TEXT")
 
     cursor.execute("PRAGMA table_info(shop_config)")
     config_columns = [col[1] for col in cursor.fetchall()]
