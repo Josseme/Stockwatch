@@ -264,7 +264,7 @@ const Audits = () => {
       <div className="tab-content">
         {activeTab === 'financials' && (
           <div className="financials-pane animate-fade-in">
-            <div className="stats-grid">
+            <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
                <div className="glass-panel metric-card" style={{ padding: '24px' }}>
                   <div className="metric-icon blue" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', padding: '12px', borderRadius: '12px', width: 'fit-content', marginBottom: '16px' }}><DollarSign size={24} /></div>
                   <h3 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: '0 0 8px 0' }}>Total Revenue</h3>

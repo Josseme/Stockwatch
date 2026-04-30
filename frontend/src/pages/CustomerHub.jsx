@@ -132,7 +132,7 @@ const CustomerHub = () => {
       </header>
 
       {/* CRM Stats */}
-      <div className="stats-grid">
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '40px' }}>
         <div className="glass-panel" style={{ padding: '24px', display: 'flex', gap: '20px', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
           <div style={{ padding: '14px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', borderRadius: '14px' }}><Users size={28} /></div>
           <div>

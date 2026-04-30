@@ -14,8 +14,8 @@ const Layout = () => {
   const [nightLight, setNightLight] = useState(localStorage.getItem('nightLight') === 'true');
   const [eyeProtection, setEyeProtection] = useState(localStorage.getItem('eyeProtection') === 'true');
   const [isCollapsed, setIsCollapsed] = useState(localStorage.getItem('sidebarCollapsed') === 'true');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(localStorage.getItem('role') === 'admin' ? 'Business Profile' : 'Themes');
   const [settings, setSettings] = useState({
     shop_name: '', owner_phone: '', shop_location: '', shop_email: '',
@@ -116,11 +116,6 @@ const Layout = () => {
     });
   };
 
-  // Close mobile sidebar on route change
-  useEffect(() => {
-    setIsMobileOpen(false);
-  }, [window.location.pathname]);
-
   // Listen for global actions from sidebar
   useEffect(() => {
     const handleAction = (e) => {
@@ -156,16 +151,40 @@ const Layout = () => {
     { name: 'Themes', icon: <Settings size={18} /> },
   ].filter(tab => !tab.adminOnly || isAdmin);
 
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [window.location.pathname]);
+
   return (
     <div className="layout-wrapper">
       <div className="mesh-bg" />
       
-      {/* Mobile Header Toggle */}
-      <button className="mobile-nav-toggle" onClick={() => setIsMobileOpen(!isMobileOpen)}>
-         {isMobileOpen ? <X size={20} /> : <Settings size={20} />}
-      </button>
+      {/* Mobile Header */}
+      <header className="mobile-header">
+        <button className="hamburger-btn" onClick={() => setMobileMenuOpen(true)}>
+          <Menu size={24} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Package size={20} color="var(--accent-primary)" />
+          <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>STOCKWATCH</span>
+        </div>
+        <div style={{ width: '40px' }} /> {/* Spacer */}
+      </header>
 
-      <Sidebar isCollapsed={isCollapsed} onToggle={toggleSidebar} isMobileOpen={isMobileOpen} />
+      {/* Mobile Sidebar Overlay */}
+      <div 
+        className={`side-drawer-overlay ${mobileMenuOpen ? 'active' : ''}`} 
+        onClick={() => setMobileMenuOpen(false)} 
+        style={{ zIndex: 199 }}
+      />
+
+      <Sidebar 
+        isCollapsed={isCollapsed} 
+        onToggle={toggleSidebar} 
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+      />
       
       <main className={`main-content ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
         <Outlet />
