@@ -10,6 +10,7 @@ import bcrypt
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Depends, BackgroundTasks, Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
+from fastapi.middleware.gzip import GZipMiddleware
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from mpesa import MpesaGateway
@@ -36,6 +37,7 @@ from tracker import check_low_stock, send_email_alert
 
 # Initialize FastAPI app
 app = FastAPI(title="Stockwatch API")
+app.add_middleware(GZipMiddleware, minimum_size=1000) # Compress responses > 1KB
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -1068,9 +1070,9 @@ def get_dashboard_analytics(current_user: dict = Depends(require_admin)):
             SUM(total_amount), 
             COUNT(id), 
             AVG(total_amount),
-            (SELECT SUM(ABS(qty_change) * (unit_price - unit_cost)) FROM transactions WHERE qty_change < 0 AND DATE(timestamp) = DATE('now', 'localtime'))
+            (SELECT SUM(ABS(qty_change) * (unit_price - unit_cost)) FROM transactions WHERE qty_change < 0 AND timestamp >= date('now', 'start of day', 'localtime'))
         FROM orders 
-        WHERE DATE(timestamp) = DATE('now', 'localtime')
+        WHERE timestamp >= date('now', 'start of day', 'localtime')
     ''')
     today_row = cursor.fetchone()
     

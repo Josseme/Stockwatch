@@ -32,5 +32,17 @@ export default defineConfig({
   server: {
     host: true, // Listen on all network interfaces
     port: 5173
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          icons: ['lucide-react'],
+          charts: ['recharts']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
   }
 })
