@@ -1,48 +1,88 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Package, TrendingUp, ShieldCheck, Users, 
   BarChart3, Zap, Globe, ArrowRight,
-  Calculator, Smartphone, ShoppingCart, Lock
+  Calculator, Smartphone, ShoppingCart, Lock,
+  CheckCircle2, Star, ZapOff, Activity
 } from 'lucide-react';
 
 const Landing = () => {
   const navigate = useNavigate();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <div className="landing-page" style={{ 
       minHeight: '100vh', 
-      background: 'var(--bg-primary)', 
-      color: 'var(--text-primary)',
+      background: '#020617', 
+      color: '#f8fafc',
       overflowX: 'hidden',
-      position: 'relative'
+      position: 'relative',
+      fontFamily: "'Inter', sans-serif"
     }}>
-      {/* Dynamic Background */}
-      <div className="mesh-bg" style={{ opacity: 0.6 }} />
-      
+      {/* Background Orbs */}
+      <div style={{ position: 'absolute', top: '-10%', left: '-5%', width: '40vw', height: '40vw', background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)', z-index: 0 }} />
+      <div style={{ position: 'absolute', bottom: '10%', right: '-5%', width: '30vw', height: '30vw', background: 'radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%)', z-index: 0 }} />
+
       {/* Navigation */}
       <nav style={{ 
-        padding: '24px 40px', 
+        padding: scrolled ? '16px 40px' : '24px 40px', 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        position: 'relative',
-        zIndex: 10
+        position: 'fixed',
+        top: 0, left: 0, right: 0,
+        zIndex: 100,
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        background: scrolled ? 'rgba(2, 6, 23, 0.8)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(16px)' : 'none',
+        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div className="metric-icon blue" style={{ width: '40px', height: '40px' }}>
-            <Package size={20} />
+          <div style={{ 
+            width: '40px', height: '40px', 
+            background: 'linear-gradient(135deg, #6366f1, #10b981)', 
+            borderRadius: '12px', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 8px 16px rgba(99, 102, 241, 0.2)'
+          }}>
+            <Package size={22} color="white" />
           </div>
-          <span style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Stockwatch</span>
+          <span style={{ fontSize: '1.5rem', fontWeight: 900, letterSpacing: '-0.03em', background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Stockwatch
+          </span>
         </div>
         <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
-          <a href="#features" style={{ color: 'var(--text-secondary)', fontWeight: 600, textDecoration: 'none' }}>Features</a>
-          <a href="#pricing" style={{ color: 'var(--text-secondary)', fontWeight: 600, textDecoration: 'none' }}>Solutions</a>
-          <Link to="/login" className="btn btn-ghost" style={{ padding: '8px 24px' }}>Sign In</Link>
+          <div className="nav-links" style={{ display: 'flex', gap: '24px' }}>
+            {['Features', 'Intelligence', 'Security', 'Pricing'].map(item => (
+              <a key={item} href={`#${item.toLowerCase()}`} style={{ color: '#94a3b8', fontWeight: 500, textDecoration: 'none', fontSize: '0.9rem', transition: 'color 0.3s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>
+                {item}
+              </a>
+            ))}
+          </div>
+          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+          <Link to="/login" style={{ color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>Sign In</Link>
           <button 
             onClick={() => navigate('/register')}
-            className="btn btn-primary" 
-            style={{ padding: '10px 28px', boxShadow: 'var(--shadow-lg)' }}
+            style={{ 
+              padding: '10px 24px', 
+              background: '#fff', 
+              color: '#020617', 
+              border: 'none', 
+              borderRadius: '10px', 
+              fontWeight: 700, 
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              transition: 'transform 0.3s'
+            }}
+            onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
+            onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
           >
             Get Started
           </button>
@@ -51,184 +91,288 @@ const Landing = () => {
 
       {/* Hero Section */}
       <header style={{ 
-        padding: '100px 40px 60px', 
+        padding: '180px 40px 100px', 
         textAlign: 'center', 
         position: 'relative', 
         zIndex: 5,
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
-        <div className="badge animate-fade-in" style={{ 
+        <div className="animate-fade-in" style={{ 
           background: 'rgba(99, 102, 241, 0.1)', 
-          color: 'var(--accent-primary)', 
-          padding: '8px 20px', 
-          borderRadius: '20px',
-          fontSize: '0.85rem',
+          border: '1px solid rgba(99, 102, 241, 0.2)',
+          color: '#818cf8', 
+          padding: '6px 16px', 
+          borderRadius: '100px',
+          fontSize: '0.75rem',
           fontWeight: 700,
           display: 'inline-flex',
           alignItems: 'center',
           gap: '8px',
-          marginBottom: '32px'
+          marginBottom: '32px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em'
         }}>
-          <Zap size={14} /> NEW: AI-Driven Inventory Forecasting
+          <Zap size={12} fill="#818cf8" /> Trusted by 500+ High-Volume Retailers
         </div>
         
         <h1 style={{ 
-          fontSize: '4.5rem', 
-          fontWeight: 800, 
-          letterSpacing: '-0.04em', 
-          lineHeight: 1.1,
-          marginBottom: '24px',
-          background: 'linear-gradient(to right, #fff, #94a3b8)',
+          fontSize: '5rem', 
+          fontWeight: 900, 
+          letterSpacing: '-0.05em', 
+          lineHeight: 1,
+          marginBottom: '32px',
+          background: 'linear-gradient(to bottom, #fff 40%, #64748b)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent'
         }}>
-          Modern Retail OS for <br />
-          <span style={{ color: 'var(--accent-primary)', WebkitTextFillColor: 'var(--accent-primary)' }}>Scale & Intelligence.</span>
+          Control your stock. <br />
+          <span style={{ color: '#10b981', WebkitTextFillColor: '#10b981' }}>Scale your empire.</span>
         </h1>
         
         <p style={{ 
-          fontSize: '1.25rem', 
-          color: 'var(--text-secondary)', 
-          maxWidth: '700px', 
-          margin: '0 auto 48px',
-          lineHeight: 1.6
+          fontSize: '1.35rem', 
+          color: '#94a3b8', 
+          maxWidth: '800px', 
+          margin: '0 auto 56px',
+          lineHeight: 1.6,
+          fontWeight: 400
         }}>
-          One unified platform for inventory, POS, staff performance, and predictive audits. 
-          Built for high-volume retail environments that demand precision.
+          Stockwatch Enterprise is a unified operating system for modern retail. 
+          Real-time inventory sync, AI-driven predictive audits, and high-performance POS 
+          built for the next generation of commerce.
         </p>
 
-        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginBottom: '80px' }}>
           <button 
              onClick={() => navigate('/register')}
-             className="btn btn-primary" 
-             style={{ padding: '16px 40px', fontSize: '1.1rem', gap: '12px' }}
+             className="btn-primary"
+             style={{ 
+               padding: '18px 48px', 
+               fontSize: '1.1rem', 
+               background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+               color: 'white',
+               border: 'none',
+               borderRadius: '14px',
+               fontWeight: 700,
+               display: 'flex',
+               alignItems: 'center',
+               gap: '12px',
+               cursor: 'pointer',
+               boxShadow: '0 20px 40px rgba(99, 102, 241, 0.3)'
+             }}
           >
-            Start Free Trial <ArrowRight size={20} />
+            Launch System <ArrowRight size={22} />
           </button>
-          <button className="btn btn-ghost" style={{ padding: '16px 40px', fontSize: '1.1rem' }}>
-            Book a Demo
+          <button style={{ 
+            padding: '18px 48px', 
+            fontSize: '1.1rem',
+            background: 'rgba(255,255,255,0.05)',
+            color: 'white',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '14px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            backdropFilter: 'blur(10px)'
+          }}>
+            Explore Features
           </button>
+        </div>
+
+        {/* Hero Image Container */}
+        <div style={{ 
+          position: 'relative',
+          padding: '20px',
+          background: 'rgba(255,255,255,0.02)',
+          borderRadius: '32px',
+          border: '1px solid rgba(255,255,255,0.05)',
+          maxWidth: '1100px',
+          margin: '0 auto',
+          boxShadow: '0 0 100px rgba(99, 102, 241, 0.1)'
+        }}>
+          <img 
+            src="/landing_hero_mockup_1777627730622.png" 
+            alt="Stockwatch Dashboard Mockup" 
+            style={{ 
+              width: '100%', 
+              borderRadius: '20px',
+              boxShadow: '0 30px 60px rgba(0,0,0,0.8)',
+              display: 'block'
+            }} 
+          />
+          
+          {/* Floating UI Elements */}
+          <div className="floating" style={{ 
+            position: 'absolute', top: '10%', right: '-5%', 
+            padding: '16px 24px', background: 'rgba(30, 41, 59, 0.9)', 
+            backdropFilter: 'blur(12px)', borderRadius: '16px', 
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', gap: '12px'
+          }}>
+             <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', animation: 'pulse 2s infinite' }} />
+             <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Live Sync Active</span>
+          </div>
         </div>
       </header>
 
-      {/* Mock Dashboard Visualization */}
-      <div style={{ 
-        maxWidth: '1100px', 
-        margin: '0 auto 120px',
-        padding: '0 40px',
-        position: 'relative'
-      }}>
-        <div className="glass-panel" style={{ 
-          padding: '12px', 
-          borderRadius: '24px', 
-          border: '1px solid rgba(255,255,255,0.1)',
-          boxShadow: '0 40px 100px rgba(0,0,0,0.5)',
-          background: 'rgba(15, 23, 42, 0.8)',
-          backdropFilter: 'blur(20px)',
-          transform: 'perspective(1000px) rotateX(5deg)',
-          animation: 'float 6s ease-in-out infinite'
-        }}>
-          <div style={{ 
-            height: '500px', 
-            borderRadius: '16px', 
-            background: '#0f172a',
-            overflow: 'hidden',
-            display: 'flex'
-          }}>
-            {/* Mock Sidebar */}
-            <div style={{ width: '200px', borderRight: '1px solid #1e293b', padding: '24px' }}>
-              {[1,2,3,4,5].map(i => (
-                <div key={i} style={{ height: '12px', background: '#1e293b', borderRadius: '6px', marginBottom: '20px', width: i % 2 === 0 ? '100%' : '70%' }} />
-              ))}
-            </div>
-            {/* Mock Content */}
-            <div style={{ flex: 1, padding: '40px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '40px' }}>
-                {[1,2,3].map(i => (
-                  <div key={i} className="glass-panel" style={{ height: '100px', background: '#1e293b' }} />
-                ))}
+      {/* Social Proof */}
+      <section style={{ padding: '40px 0 100px', textAlign: 'center' }}>
+        <p style={{ color: '#475569', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: '40px' }}>POWERING MODERN COMMERCE</p>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '60px', opacity: 0.5, filter: 'grayscale(1)' }}>
+          {['Lumina Global', 'Aether Retail', 'Vertex Logistics', 'Nova Stores'].map(name => (
+            <span key={name} style={{ fontSize: '1.5rem', fontWeight: 800, color: '#94a3b8' }}>{name}</span>
+          ))}
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section id="features" style={{ padding: '120px 40px', position: 'relative' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ marginBottom: '80px' }}>
+            <h2 style={{ fontSize: '3rem', fontWeight: 800, marginBottom: '16px' }}>Built for the high-performance shop.</h2>
+            <p style={{ color: '#94a3b8', fontSize: '1.2rem', maxWidth: '600px' }}>Enterprise-grade tools simplified for everyday retail success.</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
+            {[
+              { title: 'Predictive Audits', desc: 'Identify stock discrepancies before they impact your bottom line.', icon: <Activity />, color: '#6366f1' },
+              { title: 'Omnichannel Sync', desc: 'One inventory for physical stores, mobile sales, and warehouse.', icon: <Globe />, color: '#10b981' },
+              { title: 'Staff Performance', desc: 'Real-time leaderboard and commission tracking for floor teams.', icon: <Users />, color: '#f59e0b' },
+              { title: 'Financial Intelligence', desc: 'Auto-calculated VAT, profit margins, and daily revenue reports.', icon: <BarChart3 />, color: '#ef4444' },
+              { title: 'Universal Scanning', desc: 'Native support for barcodes, QR codes, and custom SKU patterns.', icon: <Smartphone />, color: '#0ea5e9' },
+              { title: 'Hardened Security', desc: 'Role-based access control and detailed tamper-proof logs.', icon: <ShieldCheck />, color: '#8b5cf6' }
+            ].map((f, i) => (
+              <div key={i} className="feature-card" style={{ 
+                padding: '40px', background: 'rgba(255,255,255,0.02)', 
+                borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)',
+                transition: 'all 0.3s ease'
+              }}>
+                <div style={{ 
+                  width: '56px', height: '56px', background: `${f.color}20`, 
+                  color: f.color, borderRadius: '14px', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: '24px'
+                }}>
+                  {f.icon}
+                </div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '12px' }}>{f.title}</h3>
+                <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: 1.5 }}>{f.desc}</p>
               </div>
-              <div className="glass-panel" style={{ height: '260px', background: '#1e293b' }} />
-            </div>
+            ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Registration Options Section */}
-      <section id="pricing" style={{ padding: '100px 40px', background: 'rgba(15, 23, 42, 0.5)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '60px' }}>Ready to optimize your business?</h2>
+      {/* Pricing / Registration */}
+      <section id="pricing" style={{ padding: '120px 40px', background: 'radial-gradient(circle at center, rgba(99, 102, 241, 0.05) 0%, transparent 70%)' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto', textAlign: 'center' }}>
+          <h2 style={{ fontSize: '3.5rem', fontWeight: 900, marginBottom: '64px', letterSpacing: '-0.04em' }}>Choose your perspective.</h2>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
-            {/* Option 1: Shop Owner */}
-            <div className="glass-panel" style={{ padding: '48px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ width: '64px', height: '64px', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--accent-primary)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                <ShieldCheck size={32} />
-              </div>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Shop Owner</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-                Full administrative access. Manage inventory, staff, customers, and view deep analytics.
-              </p>
-              <button 
-                onClick={() => navigate('/register')}
-                className="btn btn-primary" 
-                style={{ width: '100%', marginTop: 'auto' }}
-              >
-                Sign Up as Owner
-              </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+            <div className="tier-card" style={{ 
+              padding: '60px 48px', background: 'rgba(255,255,255,0.03)', 
+              borderRadius: '32px', border: '1px solid rgba(255,255,255,0.08)',
+              textAlign: 'left', position: 'relative', overflow: 'hidden'
+            }}>
+              <div style={{ position: 'absolute', top: 0, right: 0, padding: '24px', opacity: 0.1 }}><ShieldCheck size={120} /></div>
+              <h3 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '16px' }}>Shop Owner</h3>
+              <p style={{ color: '#94a3b8', marginBottom: '32px' }}>The full administrative suite. Control everything from suppliers to staff performance.</p>
+              <ul style={{ listArray: 'none', padding: 0, margin: '0 0 40px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {['Advanced Business Intelligence', 'Multi-staff Management', 'Inventory Level Forecasting', 'Financial Audit Reports'].map(item => (
+                  <li key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem' }}><CheckCircle2 size={18} color="#10b981" /> {item}</li>
+                ))}
+              </ul>
+              <button onClick={() => navigate('/register')} className="btn-white" style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', background: '#fff', color: '#020617', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>Register as Owner</button>
             </div>
 
-            {/* Option 2: Staff Member */}
-            <div className="glass-panel" style={{ padding: '48px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ width: '64px', height: '64px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-secondary)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                <Users size={32} />
-              </div>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Staff Member</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-                Join an existing shop. Access POS terminal and inventory scanner assigned by your manager.
-              </p>
-              <button 
-                onClick={() => navigate('/register')}
-                className="btn btn-ghost" 
-                style={{ width: '100%', marginTop: 'auto' }}
-              >
-                Join Your Team
-              </button>
-            </div>
-
-            {/* Option 3: Enterprise */}
-            <div className="glass-panel" style={{ padding: '48px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ width: '64px', height: '64px', background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                <Globe size={32} />
-              </div>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Multi-Branch</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-                For chains and franchises. Centralized management with branch-specific stock sync.
-              </p>
-              <button className="btn btn-ghost" style={{ width: '100%', marginTop: 'auto' }}>
-                Contact Sales
-              </button>
+            <div className="tier-card" style={{ 
+              padding: '60px 48px', background: 'rgba(255,255,255,0.03)', 
+              borderRadius: '32px', border: '1px solid rgba(255,255,255,0.08)',
+              textAlign: 'left', position: 'relative', overflow: 'hidden'
+            }}>
+               <div style={{ position: 'absolute', top: 0, right: 0, padding: '24px', opacity: 0.1 }}><Users size={120} /></div>
+              <h3 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '16px' }}>Staff Member</h3>
+              <p style={{ color: '#94a3b8', marginBottom: '32px' }}>Join an established team. Access the POS terminal and manage floor operations.</p>
+              <ul style={{ listArray: 'none', padding: 0, margin: '0 0 40px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {['Lightning Fast POS Checkout', 'Personal Sales Performance', 'Real-time Stock Lookups', 'Digital Receipt Issuing'].map(item => (
+                  <li key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem' }}><CheckCircle2 size={18} color="#6366f1" /> {item}</li>
+                ))}
+              </ul>
+              <button onClick={() => navigate('/register')} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>Join Your Team</button>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Final CTA */}
+      <section style={{ padding: '120px 40px', textAlign: 'center' }}>
+        <div style={{ 
+          maxWidth: '800px', margin: '0 auto', 
+          padding: '80px', background: 'linear-gradient(135deg, #6366f1, #10b981)', 
+          borderRadius: '40px', position: 'relative', overflow: 'hidden'
+        }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'url("https://www.transparenttextures.com/patterns/carbon-fibre.png")', opacity: 0.1 }} />
+          <h2 style={{ fontSize: '3rem', fontWeight: 900, marginBottom: '24px', color: '#fff' }}>Stop guessing. Start knowing.</h2>
+          <p style={{ fontSize: '1.2rem', color: 'rgba(255,255,255,0.9)', marginBottom: '40px' }}>Join the next generation of retailers using data to win.</p>
+          <button onClick={() => navigate('/register')} style={{ padding: '18px 48px', background: '#fff', color: '#020617', border: 'none', borderRadius: '14px', fontWeight: 700, fontSize: '1.1rem', cursor: 'pointer' }}>Get Started for Free</button>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer style={{ padding: '60px 40px', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+      <footer style={{ padding: '80px 40px 40px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+              <Package color="#6366f1" />
+              <span style={{ fontSize: '1.25rem', fontWeight: 900 }}>Stockwatch</span>
+            </div>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', maxWidth: '300px' }}>The intelligent operating system for high-volume retail. Built in Nairobi for the world.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '80px' }}>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Product</span>
+                <a href="#" style={{ color: '#64748b', textDecoration: 'none', fontSize: '0.9rem' }}>Dashboard</a>
+                <a href="#" style={{ color: '#64748b', textDecoration: 'none', fontSize: '0.9rem' }}>Intelligence</a>
+                <a href="#" style={{ color: '#64748b', textDecoration: 'none', fontSize: '0.9rem' }}>Security</a>
+             </div>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Company</span>
+                <a href="#" style={{ color: '#64748b', textDecoration: 'none', fontSize: '0.9rem' }}>About Us</a>
+                <a href="#" style={{ color: '#64748b', textDecoration: 'none', fontSize: '0.9rem' }}>Careers</a>
+                <a href="#" style={{ color: '#64748b', textDecoration: 'none', fontSize: '0.9rem' }}>Contact</a>
+             </div>
+          </div>
+        </div>
+        <div style={{ maxWidth: '1200px', margin: '60px auto 0', paddingTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center', color: '#475569', fontSize: '0.8rem' }}>
           &copy; 2026 Stockwatch Retail Solutions. All rights reserved.
-        </p>
+        </div>
       </footer>
 
       <style dangerouslySetInnerHTML={{ __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        
+        .floating { animation: float 6s ease-in-out infinite; }
         @keyframes float {
-          0%, 100% { transform: perspective(1000px) rotateX(5deg) translateY(0); }
-          50% { transform: perspective(1000px) rotateX(4deg) translateY(-20px); }
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
         }
-        .landing-page {
-          scroll-behavior: smooth;
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.1); }
         }
+        .feature-card:hover { 
+          background: rgba(255,255,255,0.04) !important; 
+          border-color: rgba(99, 102, 241, 0.3) !important;
+          transform: translateY(-5px);
+        }
+        .tier-card:hover {
+          border-color: rgba(255,255,255,0.2) !important;
+          background: rgba(255,255,255,0.05) !important;
+          transform: scale(1.02);
+          transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        html { scroll-behavior: smooth; }
       `}} />
     </div>
   );
