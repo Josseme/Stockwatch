@@ -17,8 +17,8 @@ const StaffManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [permissions, setPermissions] = useState({});
   const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [isResetOpen, setIsResetOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editData, setEditData] = useState({ password: '', role: '', permissions: {} });
 
   const addToast = (msg, type = 'success') => {
     const id = Date.now();
@@ -26,32 +26,18 @@ const StaffManagement = () => {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
-    if (!newPassword || newPassword.length < 4) {
-      addToast('Password must be at least 4 characters', 'error');
-      return;
-    }
-    try {
-      const res = await authFetch(`${API_BASE}/admin/users/${selectedUser.id}/password`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newPassword })
-      });
-      if (res.ok) {
-        addToast(`Password for ${selectedUser.username} has been reset`);
-        setIsResetOpen(false);
-        setNewPassword('');
-      } else {
-        const err = await res.json();
-        addToast(err.detail || 'Reset failed', 'error');
-      }
-    } catch (err) {
-      addToast(err.message, 'error');
-    }
+  const openEditModal = (user) => {
+    setSelectedUser(user);
+    const perms = user.permissions ? JSON.parse(user.permissions) : {
+      pos_access: true,
+      inventory_edit: user.role === 'admin',
+      reports_view: user.role === 'admin',
+      settings_manage: user.role === 'admin',
+      user_manage: user.role === 'admin'
+    };
+    setEditData({ password: '', role: user.role, permissions: perms });
+    setIsEditOpen(true);
   };
-
-  
 
   const fetchData = React.useCallback(async () => {
     try {
@@ -88,6 +74,7 @@ const StaffManagement = () => {
       addToast(err.message, 'error');
     }
   };
+
   const handleDeleteUser = async (userId, username) => {
     if (!window.confirm(`Are you sure you want to delete ${username}? This action cannot be undone.`)) return;
     try {
@@ -128,42 +115,33 @@ const StaffManagement = () => {
     }
   };
 
-  const openPermDrawer = (user) => {
-    setSelectedUser(user);
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
     try {
-      const perms = user.permissions ? JSON.parse(user.permissions) : {
-        pos_access: true,
-        inventory_edit: user.role === 'admin',
-        reports_view: user.role === 'admin',
-        settings_manage: user.role === 'admin',
-        user_manage: user.role === 'admin'
-      };
-      setPermissions(perms);
-      setIsPermOpen(true);
-    } catch {
-      setPermissions({});
-      setIsPermOpen(true);
-    }
-  };
-
-  const togglePermission = (key) => {
-    setPermissions(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const savePermissions = async () => {
-    try {
-      const res = await authFetch(`${API_BASE}/admin/users/${selectedUser.id}`, {
+      // 1. Update Profile (Role & Permissions)
+      const profileRes = await authFetch(`${API_BASE}/admin/users/${selectedUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: selectedUser.role, permissions })
+        body: JSON.stringify({ role: editData.role, permissions: editData.permissions })
       });
-      if (res.ok) {
-        addToast('Permissions updated successfully');
-        setIsPermOpen(false);
-        fetchData();
+
+      if (!profileRes.ok) throw new Error('Failed to update profile');
+
+      // 2. Update Password if provided
+      if (editData.password && editData.password.length >= 4) {
+        const passRes = await authFetch(`${API_BASE}/admin/users/${selectedUser.id}/password`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: editData.password })
+        });
+        if (!passRes.ok) throw new Error('Failed to reset password');
       }
-    } catch {
-      addToast('Failed to save permissions', 'error');
+
+      addToast(`Staff record for ${selectedUser.username} updated`);
+      setIsEditOpen(false);
+      fetchData();
+    } catch (err) {
+      addToast(err.message, 'error');
     }
   };
 
@@ -233,14 +211,11 @@ const StaffManagement = () => {
               </div>
 
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-                <button onClick={() => openPermDrawer(user)} title="Edit Permissions" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                   <ShieldCheck size={14} /> Permissions
+                <button onClick={() => openEditModal(user)} title="Manage Staff Member" style={{ background: 'rgba(99,102,241,0.1)', border: 'none', color: '#6366f1', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontWeight: 600 }}>
+                   <ShieldCheck size={16} /> Manage Member
                 </button>
-                <button onClick={() => { setSelectedUser(user); setIsResetOpen(true); }} title="Reset Password" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                   <Lock size={14} /> Reset
-                </button>
-                <button onClick={() => { setSelectedUser(user); setIsStatsOpen(true); }} title="View Stats" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                   <BarChart2 size={14} /> Stats
+                <button onClick={() => { setSelectedUser(user); setIsStatsOpen(true); }} title="View Stats" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                   <BarChart2 size={16} /> Stats
                 </button>
               </div>
             </div>
@@ -339,55 +314,87 @@ const StaffManagement = () => {
         </div>
       )}
 
-      {/* Permissions Drawer */}
-      <div className={`side-drawer-overlay ${isPermOpen ? 'active' : ''}`} onClick={() => setIsPermOpen(false)} />
-      <div className={`side-drawer ${isPermOpen ? 'open' : ''}`}>
-        <div className="drawer-header">
-           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-             <div style={{ padding: '8px', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '10px', color: '#6366f1' }}>
-                <ShieldCheck size={20} />
-             </div>
-             <div>
-                <h3 style={{ margin: 0 }}>RBAC Editor</h3>
-                <small style={{ color: 'var(--text-muted)' }}>{selectedUser?.username}</small>
-             </div>
-           </div>
-           <button className="btn-ghost" onClick={() => setIsPermOpen(false)}><XCircle size={20} /></button>
-        </div>
+      {isEditOpen && (
+        <div className="modal-overlay animate-fade-in" style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '60px', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)', position: 'fixed', inset: 0, zIndex: 1000 }}>
+          <div className="modal-content glass-panel animate-scale-up" style={{ width: '550px', padding: '40px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                 <div style={{ width: '48px', height: '48px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+                   {selectedUser?.username[0].toUpperCase()}
+                 </div>
+                 <div>
+                    <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Modify {selectedUser?.username}</h2>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Staff ID: #{selectedUser?.id}</p>
+                 </div>
+              </div>
+              <button className="btn-ghost" onClick={() => setIsEditOpen(false)}><XCircle size={24} /></button>
+            </div>
 
-        <div className="drawer-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Configure granular feature access for this staff member.</p>
-           
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {[
-                { id: 'pos_access', label: 'POS Terminal Access', desc: 'Allow user to process sales and issue receipts' },
-                { id: 'inventory_edit', label: 'Inventory Modification', desc: 'Add, edit or delete products from catalog' },
-                { id: 'reports_view', label: 'Financial Reports', desc: 'View revenue, profit and tax dashboards' },
-                { id: 'settings_manage', label: 'System Settings', desc: 'Change shop config and hardware setups' },
-                { id: 'user_manage', label: 'Staff Management', desc: 'Add or modify other team members' }
-              ].map(perm => (
-                <div key={perm.id} className="glass-panel" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
-                   <div style={{ flex: 1, paddingRight: '16px' }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{perm.label}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{perm.desc}</div>
-                   </div>
-                   <input 
-                    type="checkbox" 
-                    checked={permissions[perm.id] || false} 
-                    onChange={() => togglePermission(perm.id)}
-                    style={{ width: '20px', height: '20px', accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
-                   />
+            <form onSubmit={handleUpdateUser}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+                <div className="form-group">
+                  <label className="field-label">SYSTEM ROLE</label>
+                  <select 
+                    className="input-field"
+                    value={editData.role}
+                    onChange={e => setEditData({...editData, role: e.target.value})}
+                    style={{ width: '100%', padding: '12px', borderRadius: '10px' }}
+                  >
+                    <option value="cashier">Cashier</option>
+                    <option value="admin">Administrator</option>
+                  </select>
                 </div>
-              ))}
-           </div>
+                <div className="form-group">
+                  <label className="field-label">RESET PASSWORD (OPTIONAL)</label>
+                  <input 
+                    type="password"
+                    className="input-field"
+                    placeholder="Leave blank to keep"
+                    value={editData.password}
+                    onChange={e => setEditData({...editData, password: e.target.value})}
+                    style={{ width: '100%', padding: '12px', borderRadius: '10px' }}
+                  />
+                </div>
+              </div>
 
-           <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <button className="btn btn-primary" style={{ width: '100%', padding: '14px', borderRadius: '12px' }} onClick={savePermissions}>
-                 Save Access Controls
-              </button>
-           </div>
+              <div style={{ marginBottom: '32px' }}>
+                <label className="field-label" style={{ marginBottom: '16px', display: 'block' }}>FEATURE PERMISSIONS</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {[
+                    { id: 'pos_access', label: 'POS Terminal' },
+                    { id: 'inventory_edit', label: 'Inventory Manager' },
+                    { id: 'reports_view', label: 'Analytics & Reports' },
+                    { id: 'settings_manage', label: 'System Settings' },
+                    { id: 'user_manage', label: 'Team Hub Admin' }
+                  ].map(perm => (
+                    <label key={perm.id} style={{ 
+                      padding: '12px 16px', background: 'rgba(255,255,255,0.03)', 
+                      borderRadius: '12px', display: 'flex', alignItems: 'center', 
+                      gap: '12px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.05)' 
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={editData.permissions[perm.id] || false}
+                        onChange={() => setEditData({
+                          ...editData, 
+                          permissions: { ...editData.permissions, [perm.id]: !editData.permissions[perm.id] }
+                        })}
+                        style={{ width: '18px', height: '18px', accentColor: '#6366f1' }}
+                      />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{perm.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <button type="button" onClick={() => setIsEditOpen(false)} className="btn btn-ghost" style={{ flex: 1 }}>Cancel Changes</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Staff Record</button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Stats Drawer (Simplified) */}
       <div className={`side-drawer-overlay ${isStatsOpen ? 'active' : ''}`} onClick={() => setIsStatsOpen(false)} />
@@ -417,38 +424,6 @@ const StaffManagement = () => {
            </div>
         </div>
       </div>
-
-      {isResetOpen && (
-        <div className="modal-overlay animate-fade-in" style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '80px', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', position: 'fixed', inset: 0, zIndex: 1000 }}>
-          <div className="modal-content glass-panel animate-scale-up" style={{ width: '400px', padding: '40px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '10px', color: '#ef4444' }}>
-                <Lock size={20} />
-              </div>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#fff' }}>Reset Password</h2>
-            </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
-              Enter a new secure password for <strong>{selectedUser?.username}</strong>.
-            </p>
-            <form onSubmit={handleResetPassword}>
-              <div className="form-group" style={{ marginBottom: '32px' }}>
-                <label className="field-label">NEW PASSWORD</label>
-                <input 
-                  type="password" required className="input-field" autoFocus
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={{ width: '100%', padding: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <button type="button" onClick={() => setIsResetOpen(false)} className="btn btn-ghost" style={{ flex: 1 }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1, background: '#ef4444' }}>Update Password</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       <div className="toast-container">
         {toasts.map(t => (
