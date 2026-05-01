@@ -36,7 +36,7 @@ const Sidebar = ({ isCollapsed, onToggle, mobileOpen, onCloseMobile }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
     localStorage.removeItem('username');
-    navigate('/login');
+    navigate('/');
   };
 
   const triggerAction = (action, payload = null) => {
@@ -46,7 +46,7 @@ const Sidebar = ({ isCollapsed, onToggle, mobileOpen, onCloseMobile }) => {
 
   const commerceItems = [
     { name: 'POS / Checkout', path: '/pos', icon: <Package size={20} /> },
-    { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} />, adminOnly: true },
+    { name: 'Dashboard', path: '/home', icon: <LayoutDashboard size={20} />, adminOnly: true },
   ];
 
 

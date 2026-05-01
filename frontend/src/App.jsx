@@ -14,39 +14,41 @@ import CustomerHub from './pages/CustomerHub';
 import ExpiryRisk from './pages/ExpiryRisk';
 import Audits from './pages/Audits';
 
+import Landing from './pages/Landing';
+
 // Simple Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('token');
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!token) return <Navigate to="/" replace />;
   return children;
 };
 
 function App() {
+  const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role');
   const isAdmin = userRole === 'admin';
 
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* Public Home / Landing */}
+      <Route path="/" element={token ? <Navigate to="/home" replace /> : <Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
       {/* Protected Routes inside Layout */}
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        {/* Admn Dashboard or POS default */}
-        <Route path="/" element={isAdmin ? <Dashboard /> : <Inventory />} />
+        {/* Admin Dashboard or POS default */}
+        <Route path="/home" element={isAdmin ? <Dashboard /> : <Inventory />} />
         
         {/* Core Ops */}
         <Route path="/pos" element={<Inventory />} />
         
         {/* Management (Admin only) */}
-        <Route path="/admin/inventory" element={<ProtectedRoute>{isAdmin ? <InventoryManager /> : <Navigate to="/" />}</ProtectedRoute>} />
-        <Route path="/admin/staff" element={<ProtectedRoute>{isAdmin ? <StaffManagement /> : <Navigate to="/" />}</ProtectedRoute>} />
-        <Route path="/admin/customers" element={<ProtectedRoute>{isAdmin ? <CustomerHub /> : <Navigate to="/" />}</ProtectedRoute>} />
-        <Route path="/admin/expiry" element={<ProtectedRoute>{isAdmin ? <ExpiryRisk /> : <Navigate to="/" />}</ProtectedRoute>} />
-        <Route path="/admin/intelligence" element={<ProtectedRoute>{isAdmin ? <Audits /> : <Navigate to="/" />}</ProtectedRoute>} />
+        <Route path="/admin/inventory" element={<ProtectedRoute>{isAdmin ? <InventoryManager /> : <Navigate to="/home" />}</ProtectedRoute>} />
+        <Route path="/admin/staff" element={<ProtectedRoute>{isAdmin ? <StaffManagement /> : <Navigate to="/home" />}</ProtectedRoute>} />
+        <Route path="/admin/customers" element={<ProtectedRoute>{isAdmin ? <CustomerHub /> : <Navigate to="/home" />}</ProtectedRoute>} />
+        <Route path="/admin/expiry" element={<ProtectedRoute>{isAdmin ? <ExpiryRisk /> : <Navigate to="/home" />}</ProtectedRoute>} />
+        <Route path="/admin/intelligence" element={<ProtectedRoute>{isAdmin ? <Audits /> : <Navigate to="/home" />}</ProtectedRoute>} />
         
         {/* Legacy/Other */}
         <Route path="/attendance" element={<Attendance />} />
