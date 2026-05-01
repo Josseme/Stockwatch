@@ -427,7 +427,7 @@ const StaffManagement = () => {
                  </div>
                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Average Basket Value</span>
-                    <span style={{ fontWeight: 700 }}>Ksh {(performance.find(p => p.username === selectedUser?.username)?.revenue / (performance.find(p => p.username === selectedUser?.username)?.orders || 1)).toFixed(2)}</span>
+                    <span style={{ fontWeight: 700 }}>Ksh {((performance.find(p => p.username === selectedUser?.username)?.revenue || 0) / (performance.find(p => p.username === selectedUser?.username)?.orders || 1)).toFixed(2)}</span>
                  </div>
               </div>
            </div>
