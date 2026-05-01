@@ -329,7 +329,7 @@ const StaffManagement = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                  <div style={{ width: '48px', height: '48px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
-                   {selectedUser?.username[0].toUpperCase()}
+                   {selectedUser?.username ? selectedUser.username[0].toUpperCase() : '?'}
                  </div>
                  <div>
                     <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Modify {selectedUser?.username}</h2>
