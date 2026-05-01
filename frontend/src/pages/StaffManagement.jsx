@@ -28,13 +28,22 @@ const StaffManagement = () => {
 
   const openEditModal = (user) => {
     setSelectedUser(user);
-    const perms = user.permissions ? JSON.parse(user.permissions) : {
+    let perms = {
       pos_access: true,
       inventory_edit: user.role === 'admin',
       reports_view: user.role === 'admin',
       settings_manage: user.role === 'admin',
       user_manage: user.role === 'admin'
     };
+
+    if (user.permissions) {
+      try {
+        perms = typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions;
+      } catch (e) {
+        console.error("Failed to parse permissions", e);
+      }
+    }
+    
     setEditData({ password: '', role: user.role, permissions: perms });
     setIsEditOpen(true);
   };
