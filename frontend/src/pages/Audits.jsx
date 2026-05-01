@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, ShieldAlert, Calendar, DollarSign, Package, 
-  User, Star, Users, LayoutDashboard, 
+  User, Star, Users, 
   ShieldCheck, FileText, Download, Printer, Plus,
   Search, ChevronRight, RotateCcw
 } from 'lucide-react';
@@ -200,10 +200,10 @@ const Audits = () => {
   const totalExpenses = (expenses || []).reduce((acc, curr) => acc + (curr.amount || 0), 0);
   const netProfit = totalGrossProfit - totalExpenses;
 
-  const filteredOrders = orders.filter(o => 
-    o.id.toString().includes(salesSearch) || 
+  const filteredOrders = (orders || []).filter(o => 
+    (o.id || '').toString().includes(salesSearch) || 
     (o.customer && o.customer.toLowerCase().includes(salesSearch.toLowerCase())) ||
-    o.staff.toLowerCase().includes(salesSearch.toLowerCase())
+    (o.staff && o.staff.toLowerCase().includes(salesSearch.toLowerCase()))
   );
 
   const tabs = [
@@ -444,11 +444,11 @@ const Audits = () => {
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {securityLogs.map(log => (
                       <div key={log.id} style={{ display: 'flex', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', alignItems: 'center' }}>
-                         <div style={{ padding: '10px', background: log.action_type.includes('FAILED') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)', color: log.action_type.includes('FAILED') ? '#ef4444' : '#3b82f6', borderRadius: '10px' }}>
-                            {log.action_type.includes('LOGIN') ? <User size={18} /> : <Plus size={18} />}
+                         <div style={{ padding: '10px', background: (log.action_type || '').includes('FAILED') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)', color: (log.action_type || '').includes('FAILED') ? '#ef4444' : '#3b82f6', borderRadius: '10px' }}>
+                            {(log.action_type || '').includes('LOGIN') ? <User size={18} /> : <Plus size={18} />}
                          </div>
                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 700, textTransform: 'capitalize' }}>{log.action_type.replace(/_/g, ' ')}</div>
+                            <div style={{ fontWeight: 700, textTransform: 'capitalize' }}>{(log.action_type || '').replace(/_/g, ' ')}</div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Performed by {log.username}</div>
                          </div>
                          <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.5 }}>

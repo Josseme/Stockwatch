@@ -1160,11 +1160,11 @@ def get_order_details(order_id):
         
     # Get Order Items
     cursor.execute('''
-        SELECT item_name, qty_change, unit_price
+        SELECT item_name, qty_change, unit_price, item_id
         FROM transactions
         WHERE order_id = ?
     ''', (order_id,))
-    items = [{"name": r[0], "qty": abs(r[1]), "price": r[2]} for r in cursor.fetchall()]
+    items = [{"name": r[0], "qty": abs(r[1]), "price": r[2], "item_id": r[3]} for r in cursor.fetchall()]
     
     conn.close()
     return {

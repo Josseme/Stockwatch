@@ -5,7 +5,7 @@ import { authFetch } from '../authFetch';
 import { 
   X, Settings, Package, Bell, 
   Printer, Mail, Database, Globe,
-  Landmark, ShieldCheck, Check
+  Landmark, ShieldCheck, Check, Menu
 } from 'lucide-react';
 
 const Layout = () => {
