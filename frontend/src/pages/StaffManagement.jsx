@@ -324,7 +324,7 @@ const StaffManagement = () => {
       )}
 
       {isEditOpen && (
-        <div className="modal-overlay animate-fade-in" style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '60px', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)', position: 'fixed', inset: 0, zIndex: 1000 }}>
+        <div className="modal-overlay animate-fade-in" style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '80px', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', position: 'fixed', inset: 0, zIndex: 1000, opacity: 1, visibility: 'visible' }}>
           <div className="modal-content glass-panel animate-scale-up" style={{ width: '550px', padding: '40px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
