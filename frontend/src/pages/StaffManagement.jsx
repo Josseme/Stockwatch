@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {   Users, UserPlus, Shield, Clock, 
   CheckCircle, XCircle, BarChart2, Calendar,
-  MoreVertical, ShieldCheck, Mail, Phone, Trash2
+  MoreVertical, ShieldCheck, Mail, Phone, Trash2, Lock
 } from 'lucide-react';
 import { authFetch } from '../authFetch';
 import { API_BASE } from '../config';
