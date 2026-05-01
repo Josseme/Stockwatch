@@ -17,11 +17,38 @@ const StaffManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [permissions, setPermissions] = useState({});
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
 
   const addToast = (msg, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 4) {
+      addToast('Password must be at least 4 characters', 'error');
+      return;
+    }
+    try {
+      const res = await authFetch(`${API_BASE}/admin/users/${selectedUser.id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword })
+      });
+      if (res.ok) {
+        addToast(`Password for ${selectedUser.username} has been reset`);
+        setIsResetOpen(false);
+        setNewPassword('');
+      } else {
+        const err = await res.json();
+        addToast(err.detail || 'Reset failed', 'error');
+      }
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
   };
 
   
@@ -205,12 +232,15 @@ const StaffManagement = () => {
                 </div>
               </div>
 
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between' }}>
-                <button onClick={() => openPermDrawer(user)} className="btn-icon" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                  <ShieldCheck size={16} /> Edit Permissions
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                <button onClick={() => openPermDrawer(user)} title="Edit Permissions" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                   <ShieldCheck size={14} /> Permissions
                 </button>
-                <button onClick={() => { setSelectedUser(user); setIsStatsOpen(true); }} className="btn-icon" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                  <BarChart2 size={16} /> View Stats
+                <button onClick={() => { setSelectedUser(user); setIsResetOpen(true); }} title="Reset Password" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                   <Lock size={14} /> Reset
+                </button>
+                <button onClick={() => { setSelectedUser(user); setIsStatsOpen(true); }} title="View Stats" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                   <BarChart2 size={14} /> Stats
                 </button>
               </div>
             </div>
@@ -387,6 +417,38 @@ const StaffManagement = () => {
            </div>
         </div>
       </div>
+
+      {isResetOpen && (
+        <div className="modal-overlay animate-fade-in" style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '80px', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', position: 'fixed', inset: 0, zIndex: 1000 }}>
+          <div className="modal-content glass-panel animate-scale-up" style={{ width: '400px', padding: '40px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+              <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '10px', color: '#ef4444' }}>
+                <Lock size={20} />
+              </div>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#fff' }}>Reset Password</h2>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
+              Enter a new secure password for <strong>{selectedUser?.username}</strong>.
+            </p>
+            <form onSubmit={handleResetPassword}>
+              <div className="form-group" style={{ marginBottom: '32px' }}>
+                <label className="field-label">NEW PASSWORD</label>
+                <input 
+                  type="password" required className="input-field" autoFocus
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  style={{ width: '100%', padding: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <button type="button" onClick={() => setIsResetOpen(false)} className="btn btn-ghost" style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1, background: '#ef4444' }}>Update Password</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div className="toast-container">
         {toasts.map(t => (

@@ -31,7 +31,8 @@ from database import (
     get_live_users,
     process_checkout,
     create_user,
-    log_security_event
+    log_security_event,
+    update_user_password
 )
 from tracker import check_low_stock, send_email_alert
 
@@ -966,6 +967,28 @@ def update_user_data(user_id: int, data: dict, current_user: dict = Depends(requ
     perms_str = json.dumps(permissions) if permissions is not None else None
     update_user_profile(user_id, role=role, permissions=perms_str)
     return {"message": "User profile updated"}
+
+@app.put("/api/admin/users/{user_id}/password")
+def admin_reset_password(user_id: int, data: dict, current_user: dict = Depends(require_admin)):
+    new_password = data.get("password")
+    if not new_password or len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    
+    success, msg = update_user_password(user_id, get_password_hash(new_password))
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"message": "Staff password reset successfully"}
+
+@app.put("/api/auth/me/password")
+def change_own_password(data: dict, current_user: dict = Depends(get_current_user)):
+    new_password = data.get("password")
+    if not new_password or len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    
+    success, msg = update_user_password(current_user["id"], get_password_hash(new_password))
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"message": "Your password has been updated"}
 
 @app.delete("/api/admin/users/{user_id}")
 def remove_user(user_id: int, current_user: dict = Depends(require_admin)):

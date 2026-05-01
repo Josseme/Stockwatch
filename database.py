@@ -540,6 +540,19 @@ def update_user_profile(user_id, is_active=None, role=None, permissions=None):
     conn.commit()
     conn.close()
 
+def update_user_password(user_id, password_hash):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
+        conn.commit()
+        return True, "Password updated successfully"
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
+
 def toggle_user_status(user_id, status):
     update_user_profile(user_id, is_active=status)
 
