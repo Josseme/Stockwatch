@@ -788,6 +788,7 @@ body.dark-mode .modern-table .hover-row:hover {
     transform: translateX(-100%);
     width: 280px !important;
     box-shadow: var(--shadow-xl);
+    z-index: 300;
   }
 
   .sidebar.mobile-open {
