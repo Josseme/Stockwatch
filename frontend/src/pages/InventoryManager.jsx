@@ -214,7 +214,7 @@ const InventoryManager = () => {
       </header>
 
       {/* Filters Bar */}
-      <div className="filters-bar glass-panel" style={{ padding: '20px', display: 'flex', gap: '20px', marginBottom: '24px', alignItems: 'center' }}>
+      <div className="filters-bar glass-panel responsive-flex">
         <div className="search-box" style={{ flex: 1, position: 'relative' }}>
           <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input 
@@ -243,7 +243,7 @@ const InventoryManager = () => {
       </div>
 
       {/* Products Grid */}
-      <div className="glass-panel" style={{ overflow: 'hidden' }}>
+      <div className="table-container glass-panel" style={{ overflowX: 'auto' }}>
         <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ textAlign: 'left', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>

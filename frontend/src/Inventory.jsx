@@ -780,7 +780,7 @@ export default function Inventory() {
                 placeholder="Search products..." 
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
-                style={{ width: '300px', paddingLeft: '44px', paddingRight: '44px' }}
+                style={{ maxWidth: '300px', width: '100%', paddingLeft: '44px', paddingRight: '44px' }}
               />
               <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               {searchFilter && (

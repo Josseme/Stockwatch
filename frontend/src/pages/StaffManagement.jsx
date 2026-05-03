@@ -166,7 +166,7 @@ const StaffManagement = () => {
         </button>
       </header>
 
-      <div className="staff-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '24px', marginBottom: '40px' }}>
+      <div className="staff-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '24px', marginBottom: '40px' }}>
         {users.map(user => {
           const perf = performance.find(p => p.username === user.username) || { revenue: 0, orders: 0 };
           return (
@@ -232,7 +232,7 @@ const StaffManagement = () => {
         })}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+      <div className="grid-2-1">
         <div className="glass-panel" style={{ padding: '30px' }}>
            <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
              <Clock size={20} style={{ color: 'var(--accent-primary)' }} /> Live Attendance Timeline

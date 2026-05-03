@@ -24,7 +24,7 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   
-  --sidebar-width: 350px;
+  --sidebar-width: 280px;
   --sidebar-collapsed-width: 84px;
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -123,7 +123,7 @@ body {
 .main-content {
   flex: 1;
   margin-left: var(--sidebar-width);
-  padding: 32px 24px 32px 0px;
+  padding: 32px;
   min-height: 100vh;
   transition: var(--transition-smooth);
 }
@@ -202,6 +202,7 @@ h3 { font-size: 1.125rem; font-weight: 600; }
   font-weight: 500;
   transition: var(--transition-smooth);
   margin-bottom: 4px;
+  width: 100%;
 }
 
 .nav-item:hover, .nav-item.active {
@@ -274,9 +275,56 @@ tr:hover td {
 /* Dashboard Metrics */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 24px;
   margin-bottom: 32px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.grid-2-1 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .grid-2-1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.responsive-flex {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .responsive-flex {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .metric-card {
@@ -350,6 +398,7 @@ tr:hover td {
   top: 0;
   height: 100vh;
   width: 450px;
+  max-width: 100%;
   background: var(--surface);
   border-left: 1px solid var(--border);
   z-index: 500;
@@ -694,4 +743,67 @@ body.dark-mode .modern-table .hover-row:hover {
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(30px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+/* --- Mobile Responsiveness --- */
+.mobile-header {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  z-index: 200;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hamburger-btn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.hamburger-btn:hover {
+  background: var(--bg-secondary);
+}
+
+@media (max-width: 1024px) {
+  .mobile-header {
+    display: flex;
+  }
+
+  .sidebar {
+    transform: translateX(-100%);
+    width: 280px !important;
+    box-shadow: var(--shadow-xl);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+    padding: 80px 16px 32px 16px;
+  }
+
+  .sidebar.collapsed {
+    width: 280px !important; /* Don't collapse on mobile */
+  }
+
+  .nav-footer {
+    padding-bottom: 40px;
+  }
 }
